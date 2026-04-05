@@ -1,0 +1,153 @@
+[
+  {
+    "id": "Doc_01",
+    "topic": "budgeting",
+    "title": "Budgeting Basics",
+    "content": "Budgeting is the process of planning how to use your income. It helps you understand where your money goes each month. A good budget ensures that essential expenses are covered first. It also reduces overspending. Budgeting improves financial control over time."
+  },
+  {
+    "id": "Doc_02",
+    "topic": "budgeting",
+    "title": "Budget Categories",
+    "content": "Expenses can be divided into needs, wants, and savings. Needs include rent, food, and utilities. Wants include entertainment and dining out. Savings should be treated as a priority. Clear categories make budgeting easier."
+  },
+  {
+    "id": "Doc_03",
+    "topic": "budgeting",
+    "title": "Benefits of Budgeting",
+    "content": "Budgeting helps you avoid unnecessary debt. It allows you to plan future expenses. You can track spending and adjust habits. It improves financial awareness. Over time, it builds discipline."
+  },
+
+  {
+    "id": "Doc_04",
+    "topic": "saving",
+    "title": "Saving Basics",
+    "content": "Saving means setting aside money for future use. It helps you prepare for unexpected situations. Even small amounts can grow over time. Consistency is more important than amount. Saving regularly builds financial security."
+  },
+  {
+    "id": "Doc_05",
+    "topic": "saving",
+    "title": "Saving Strategies",
+    "content": "A simple method is to save a fixed percentage of income. You can automate transfers to a savings account. Saving right after receiving income is effective. This reduces the temptation to spend. Regular saving builds strong habits."
+  },
+  {
+    "id": "Doc_06",
+    "topic": "saving",
+    "title": "Why Saving Matters",
+    "content": "Savings provide financial stability. They reduce reliance on borrowing. Savings support future goals. They also reduce financial stress. Having savings improves confidence."
+  },
+
+  {
+    "id": "Doc_07",
+    "topic": "emergency fund",
+    "title": "Emergency Fund Basics",
+    "content": "An emergency fund is money set aside for unexpected events. This may include medical expenses or job loss. It should be separate from daily spending money. The goal is to provide financial protection. It helps avoid debt during emergencies."
+  },
+  {
+    "id": "Doc_08",
+    "topic": "emergency fund",
+    "title": "How Much to Save",
+    "content": "A common guideline is to save three to six months of living expenses. This provides a safety buffer. Start small and build gradually. Consistency matters more than speed. The fund should be easy to access."
+  },
+  {
+    "id": "Doc_09",
+    "topic": "emergency fund",
+    "title": "When to Use Emergency Funds",
+    "content": "Emergency funds should only be used for real emergencies. Examples include urgent repairs or medical needs. It should not be used for shopping or travel. Using it properly preserves its purpose. Always rebuild it after use."
+  },
+
+  {
+    "id": "Doc_10",
+    "topic": "needs vs wants",
+    "title": "Understanding Needs",
+    "content": "Needs are essential for daily living. They include housing, food, and utilities. These expenses must be prioritized. Without them, daily life is affected. Needs should always come first."
+  },
+  {
+    "id": "Doc_11",
+    "topic": "needs vs wants",
+    "title": "Understanding Wants",
+    "content": "Wants are non-essential expenses. They include entertainment and luxury items. They improve lifestyle but are not necessary. Too many wants can lead to overspending. They should be controlled carefully."
+  },
+  {
+    "id": "Doc_12",
+    "topic": "needs vs wants",
+    "title": "Making Better Spending Decisions",
+    "content": "Distinguishing needs and wants improves financial decisions. It helps reduce unnecessary spending. You can allocate money more effectively. This supports saving goals. Better decisions lead to stability."
+  },
+
+  {
+    "id": "Doc_13",
+    "topic": "debt basics",
+    "title": "What is Debt",
+    "content": "Debt is money borrowed that must be repaid. It often includes interest charges. Common types include credit cards and loans. Debt can be useful if managed carefully. Poor management leads to financial problems."
+  },
+  {
+    "id": "Doc_14",
+    "topic": "debt basics",
+    "title": "Interest and Repayment",
+    "content": "Interest is the cost of borrowing money. Higher interest increases total repayment. Paying on time reduces extra costs. Minimum payments may increase total debt. Understanding interest helps better decisions."
+  },
+  {
+    "id": "Doc_15",
+    "topic": "debt basics",
+    "title": "Managing Debt Responsibly",
+    "content": "Avoid taking unnecessary debt. Always understand repayment terms. Pay more than the minimum when possible. Track all balances. Responsible management reduces financial risk."
+  },
+
+  {
+    "id": "Doc_16",
+    "topic": "subscription management",
+    "title": "Understanding Subscriptions",
+    "content": "Subscriptions are recurring payments. They include streaming services or memberships. These costs may seem small individually. Over time, they add up. Tracking them is important."
+  },
+  {
+    "id": "Doc_17",
+    "topic": "subscription management",
+    "title": "Identifying Unused Subscriptions",
+    "content": "Some subscriptions are rarely used. Review them regularly. Cancel those that provide little value. This reduces unnecessary expenses. It improves spending efficiency."
+  },
+  {
+    "id": "Doc_18",
+    "topic": "subscription management",
+    "title": "Managing Recurring Costs",
+    "content": "List all subscriptions in one place. Set reminders for billing dates. Review them monthly. Keep only what you truly use. This helps control spending."
+  },
+
+  {
+    "id": "Doc_19",
+    "topic": "spending habits",
+    "title": "Common Spending Patterns",
+    "content": "Common patterns include frequent food delivery and impulse buying. Small purchases can add up over time. Subscriptions may go unnoticed. Recognizing patterns is the first step to improvement."
+  },
+  {
+    "id": "Doc_20",
+    "topic": "spending habits",
+    "title": "Improving Spending Habits",
+    "content": "Tracking daily expenses increases awareness. Small changes can reduce spending significantly. Avoid impulsive purchases. Set simple spending limits. Better habits lead to better finances."
+  },
+  {
+    "id": "Doc_21",
+    "topic": "spending habits",
+    "title": "Controlling Impulse Spending",
+    "content": "Impulse spending happens without planning. It is often triggered by emotions. Waiting before buying helps reduce it. Setting limits can control behavior. Awareness is key to change."
+  },
+
+  {
+    "id": "Doc_22",
+    "topic": "financial goals",
+    "title": "Setting Financial Goals",
+    "content": "Financial goals give direction to money decisions. They can be short-term or long-term. Clear goals improve motivation. They help prioritize spending and saving. Goals should be realistic."
+  },
+  {
+    "id": "Doc_23",
+    "topic": "financial goals",
+    "title": "Short-term vs Long-term Goals",
+    "content": "Short-term goals may include saving for a purchase. Long-term goals include future financial security. Both types are important. Balancing them improves planning. Regular review keeps goals relevant."
+  },
+  {
+    "id": "Doc_24",
+    "topic": "financial goals",
+    "title": "Staying Consistent",
+    "content": "Consistency is key to achieving goals. Regular saving supports progress. Tracking progress keeps motivation high. Small steps lead to success. Discipline ensures better outcomes."
+  }
+]
