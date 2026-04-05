@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from agents.insights.agent import generate_insights
-from agents.insights.schemas import InsightsRequest, InsightsResult
+from schemas.insights import InsightsRequest, InsightsResult
 
 router = APIRouter(
     prefix="/insights",

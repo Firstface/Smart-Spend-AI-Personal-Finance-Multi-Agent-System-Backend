@@ -1,0 +1,21 @@
+"""
+Follow-up & Insights Agent 配置常量。
+集中管理LLM参数、提示词版本，方便调优。
+"""
+
+# 提示词版本（LLMSecOps — 版本化追踪）
+PROMPT_VERSION = "v1.0"
+
+# LLM配置
+LLM_MODEL = "gpt-4o-mini"
+LLM_MAX_TOKENS = 500
+LLM_TEMPERATURE = 0.7
+
+# 洞察配置
+MAX_RECOMMENDATIONS = 5
+MAX_TREND_CATEGORIES = 5
+MAX_UNUSUAL_SPENDINGS = 5
+
+# 反思配置
+REFLECTION_MAX_ROUNDS = 2
+REFLECTION_TEMPERATURE = 0.1

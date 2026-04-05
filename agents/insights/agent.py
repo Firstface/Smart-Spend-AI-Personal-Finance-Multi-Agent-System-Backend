@@ -14,10 +14,10 @@ from agents.insights.analysis.trend import analyze_spending_trends
 from agents.insights.analysis.anomaly import detect_unusual_spending
 from agents.insights.analysis.subscription import aggregate_subscriptions
 from agents.insights.recommendations.generator import generate_spending_recommendations
-from agents.insights.schemas import MonthlySummary, SpendingTrend, UnusualSpending, SubscriptionSummary, \
+from schemas.insights import MonthlySummary, SpendingTrend, UnusualSpending, SubscriptionSummary, \
     SpendingRecommendation, InsightsResult
-
-SubscriptionSummary, SpendingRecommendation, InsightsResult
+from agents.insights.reflection import reflect_on_insights, generate_insights_metadata
+from agents.insights.utils import clear_cache
 
 logger = logging.getLogger("insights.agent")
 
@@ -68,8 +68,14 @@ async def generate_insights(
         recommendations=recommendations
     )
     
+    # 对洞察进行反思和改进
+    result = reflect_on_insights(result, len(transactions))
+    
     logger.info(f"Insights generated successfully for user {user_id}")
     return result
+
+
+
 
 
 def _load_transactions(
