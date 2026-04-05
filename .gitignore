@@ -33,3 +33,8 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+.dockerignore
+.env.example
+docker-compose.yml
+Dockerfile
+.env.example
