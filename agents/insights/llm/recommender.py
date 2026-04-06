@@ -63,17 +63,28 @@ def _get_llm():
     返回可用的 LLM 实例。
     优先 gpt-4o-mini（OpenAI），无 Key 时回退到 llama-3.1-8b-instant（Groq）。
     """
+    logger.debug("开始获取 LLM 实例...")
+    
     openai_key = os.getenv("OPENAI_API_KEY", "")
     groq_key = os.getenv("GROQ_API_KEY", "")
+    openai_base = os.getenv("OPENAI_API_BASE", "")
+    openai_model = os.getenv("OPENAI_MODEL", LLM_MODEL)
+    
+    logger.debug(f"环境变量检查: OPENAI_API_KEY={'***' if openai_key else '未设置'}")
+    logger.debug(f"环境变量检查: GROQ_API_KEY={'***' if groq_key else '未设置'}")
+    logger.debug(f"环境变量检查: OPENAI_API_BASE={openai_base if openai_base else '未设置'}")
+    logger.debug(f"环境变量检查: OPENAI_MODEL={openai_model}")
 
     if openai_key and openai_key != "sk-xxx":
         from langchain_openai import ChatOpenAI
-        logger.debug("LLM 路径: OpenAI gpt-4o-mini")
+        logger.debug(f"LLM 路径: OpenAI {openai_model}")
+        logger.debug(f"使用 base_url: {openai_base if openai_base else '默认'}")
         return ChatOpenAI(
-            model=LLM_MODEL,
+            model=openai_model,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             api_key=openai_key,
+            base_url=openai_base if openai_base else None,
         )
     elif groq_key:
         try:
@@ -88,15 +99,23 @@ def _get_llm():
         except ImportError:
             logger.warning("langchain_groq 未安装，回退到 OpenAI（即使 key 为占位符）")
             from langchain_openai import ChatOpenAI
+            logger.debug(f"回退到 OpenAI {openai_model}")
             return ChatOpenAI(
-                model=LLM_MODEL,
+                model=openai_model,
                 temperature=LLM_TEMPERATURE,
                 max_tokens=LLM_MAX_TOKENS,
+                base_url=openai_base if openai_base else None,
             )
     else:
         from langchain_openai import ChatOpenAI
         logger.warning("未检测到有效 LLM Key，使用默认 OpenAI（可能失败）")
-        return ChatOpenAI(model=LLM_MODEL, temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS)
+        logger.debug(f"使用默认 OpenAI {openai_model}")
+        return ChatOpenAI(
+            model=openai_model,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+            base_url=openai_base if openai_base else None,
+        )
 
 
 # ── 主建议生成函数 ─────────────────────────────────────────────────────────────
@@ -118,16 +137,34 @@ async def generate_ai_recommendations(
     Returns:
         List[SpendingRecommendation]: AI 生成的建议列表
     """
+    logger.debug("开始生成 AI 建议...")
+    
+    # 获取 LLM 实例
     llm = _get_llm()
+    logger.debug(f"获取到 LLM 实例: {type(llm).__name__}")
+    
+    # 构建 LLM 调用链
     chain = RECOMMENDATION_PROMPT | llm | JsonOutputParser()
+    logger.debug("构建 LLM 调用链完成")
 
     try:
-        result = await chain.ainvoke({
+        # 准备输入数据
+        input_data = {
             "total_expense": total_expense,
             "average_monthly_spending": average_monthly_spending,
             "top_categories": top_categories,
             "recent_transactions": recent_transactions
-        })
+        }
+        
+        logger.debug("开始调用 LLM 生成建议...")
+        logger.debug(f"输入数据 - 总支出: {total_expense:.2f}, 月均支出: {average_monthly_spending:.2f}")
+        logger.debug(f"前5大支出类别: {top_categories}")
+        logger.debug(f"最近交易: {recent_transactions}")
+        
+        # 调用 LLM
+        result = await chain.ainvoke(input_data)
+        
+        logger.debug(f"LLM 调用成功，返回结果: {result}")
 
         # ── 输出验证 ─────────────────────────────────────────────────────
         recommendations = []
@@ -142,12 +179,16 @@ async def generate_ai_recommendations(
                 recommendations.append(recommendation)
             except Exception as e:
                 logger.warning(f"解析建议失败: {e}")
+                logger.debug(f"失败的建议数据: {rec}")
                 continue
 
         logger.info(f"AI 生成了 {len(recommendations)} 条建议")
+        logger.debug(f"生成的建议: {[rec.title for rec in recommendations]}")
         return recommendations
 
     except Exception as e:
         logger.error(f"LLM 建议生成失败: {e}")
+        logger.debug(f"LLM 调用详细错误: {str(e)}")
+        logger.debug(f"错误类型: {type(e).__name__}")
         # 安全回退：返回空列表
         return []

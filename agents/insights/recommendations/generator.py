@@ -18,9 +18,10 @@ logger = logging.getLogger("insights.recommendations")
 
 
 @cached_analysis()
-def generate_spending_recommendations(
+async def generate_spending_recommendations(
     transactions: List[Transaction],
-    monthly_summary: MonthlySummary
+    monthly_summary: MonthlySummary,
+    use_llm: bool = True
 ) -> List[SpendingRecommendation]:
     """
     生成支出建议
@@ -28,6 +29,7 @@ def generate_spending_recommendations(
     Args:
         transactions: 交易列表
         monthly_summary: 月度摘要
+        use_llm: 是否使用 LLM 生成智能建议（默认为 True）
     
     Returns:
         List[SpendingRecommendation]: 建议列表
@@ -75,9 +77,12 @@ def generate_spending_recommendations(
                 priority="low"
             ))
         
-        # 生成 AI 智能建议
-        ai_recommendations = _get_ai_recommendations(transactions, monthly_summary)
-        recommendations.extend(ai_recommendations)
+        # 生成 AI 智能建议（如果启用）
+        if use_llm:
+            ai_recommendations = await _get_ai_recommendations(transactions, monthly_summary)
+            recommendations.extend(ai_recommendations)
+        else:
+            logger.info("LLM 功能已禁用，仅使用规则-based 建议")
         
         logger.info(f"生成了 {len(recommendations)} 条支出建议")
         return recommendations
@@ -86,7 +91,7 @@ def generate_spending_recommendations(
         return []
 
 
-def _get_ai_recommendations(
+async def _get_ai_recommendations(
     transactions: List[Transaction],
     monthly_summary: MonthlySummary
 ) -> List[SpendingRecommendation]:
@@ -100,8 +105,6 @@ def _get_ai_recommendations(
     Returns:
         List[SpendingRecommendation]: AI 生成的建议列表
     """
-    import asyncio
-    
     # 构建输入数据
     top_categories_str = "\n".join([f"  - {cat.category}: {cat.amount:.2f}元 ({cat.percentage:.1f}%)" 
                                   for cat in monthly_summary.top_categories])
@@ -109,17 +112,27 @@ def _get_ai_recommendations(
     recent_transactions_str = "\n".join([f"  - {txn.counterparty}: {txn.amount:.2f}元 ({txn.category})" 
                                          for txn in transactions[-10:]])
     
+    logger.debug(f"准备调用 LLM 生成建议")
+    logger.debug(f"月度摘要: 总支出={monthly_summary.total_expense:.2f}, 月均支出={monthly_summary.average_monthly_spending:.2f}")
+    
     # 异步调用 LLM 生成建议
     try:
-        ai_recommendations = asyncio.run(generate_ai_recommendations(
+        ai_recommendations = await generate_ai_recommendations(
             total_expense=monthly_summary.total_expense,
             average_monthly_spending=monthly_summary.average_monthly_spending,
             top_categories=top_categories_str,
             recent_transactions=recent_transactions_str
-        ))
+        )
+        logger.info(f"AI 生成了 {len(ai_recommendations)} 条智能建议")
+        logger.debug(f"AI 建议详情: {[rec.title for rec in ai_recommendations]}")
         return ai_recommendations
+    except ImportError as e:
+        # 处理 LLM 相关模块导入失败
+        logger.warning(f"LLM 模块导入失败: {e}，跳过 AI 建议生成")
+        logger.debug(f"导入错误详情: {str(e)}")
+        return []
     except Exception as e:
-        import logging
-        logger = logging.getLogger("insights.recommendations")
-        logger.error(f"AI 建议生成失败: {e}")
+        # 处理其他 LLM 调用失败
+        logger.error(f"AI 建议生成失败: {e}，跳过 AI 建议生成")
+        logger.debug(f"LLM 调用错误详情: {str(e)}")
         return []

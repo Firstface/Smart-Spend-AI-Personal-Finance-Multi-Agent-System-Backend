@@ -77,7 +77,8 @@ async def generate_insights(
     user_id: str,
     db: Session,
     start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None,
+    use_llm: bool = True
 ) -> InsightsResult:
     """
     生成综合财务洞察
@@ -87,6 +88,7 @@ async def generate_insights(
         db: 数据库会话
         start_date: 开始日期（默认3个月前）
         end_date: 结束日期（默认今天）
+        use_llm: 是否使用 LLM 生成智能建议（默认为 True）
     
     Returns:
         InsightsResult: 包含所有洞察的结果对象
@@ -108,7 +110,11 @@ async def generate_insights(
     spending_trends = analyze_spending_trends(transactions, start_date, end_date)
     unusual_spending = detect_unusual_spending(transactions)
     subscriptions = aggregate_subscriptions(transactions)
-    recommendations = generate_spending_recommendations(transactions, monthly_summary)
+    
+    # 生成支出建议（使用 await 调用异步函数）
+    logger.debug(f"开始生成支出建议，use_llm={use_llm}")
+    recommendations = await generate_spending_recommendations(transactions, monthly_summary, use_llm=use_llm)
+    logger.debug(f"支出建议生成完成，共 {len(recommendations)} 条建议")
     
     # 构建结果
     result = InsightsResult(
