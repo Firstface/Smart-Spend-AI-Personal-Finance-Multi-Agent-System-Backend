@@ -32,7 +32,7 @@ async def generate_monthly_plans(
             detail="Failed to generate budget plans. Please check Agent logs."
         )
     
-    return plans
+    return [BudgetPlanCreate.model_validate(plan) for plan in plans]
 
 @router.get("/my-plans/{user_id}", response_model=List[BudgetPlanCreate])
 async def get_user_plans(
