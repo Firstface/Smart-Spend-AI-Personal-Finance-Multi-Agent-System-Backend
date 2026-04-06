@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # 配置结构化日志
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 

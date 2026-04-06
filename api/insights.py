@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from agents.insights.agent import generate_insights
+from agents.insights.agent import generate_insights, check_llm_connection
 from schemas.insights import InsightsRequest, InsightsResult
 
 router = APIRouter(
@@ -44,3 +44,12 @@ def health_check():
     健康检查
     """
     return {"status": "ok", "service": "smart-spend-insights-agent"}
+
+
+@router.get("/llm/health")
+async def check_llm_health():
+    """
+    检查 LLM 连接状态
+    """
+    result = await check_llm_connection()
+    return result

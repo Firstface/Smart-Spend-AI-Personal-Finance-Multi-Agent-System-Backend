@@ -4,7 +4,6 @@ Follow-up & Insights Agent 主入口。
 负责生成财务摘要、分析支出趋势、检测异常支出、汇总订阅等。
 """
 import logging
-from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
@@ -14,12 +13,64 @@ from agents.insights.analysis.trend import analyze_spending_trends
 from agents.insights.analysis.anomaly import detect_unusual_spending
 from agents.insights.analysis.subscription import aggregate_subscriptions
 from agents.insights.recommendations.generator import generate_spending_recommendations
-from schemas.insights import MonthlySummary, SpendingTrend, UnusualSpending, SubscriptionSummary, \
-    SpendingRecommendation, InsightsResult
-from agents.insights.reflection import reflect_on_insights, generate_insights_metadata
-from agents.insights.utils import clear_cache
+from schemas.insights import InsightsResult
+from agents.insights.reflection import reflect_on_insights
+from typing import List, Dict, Optional, Any
+from agents.insights.llm.recommender import _get_llm, generate_ai_recommendations
 
 logger = logging.getLogger("insights.agent")
+
+
+async def check_llm_connection() -> Dict[str, Any]:
+    """
+    检查 LLM 连接状态
+    
+    Returns:
+        Dict[str, any]: 包含 LLM 连接状态的字典
+    """
+    logger.info("检查 LLM 连接状态...")
+    
+    try:
+        # 尝试获取 LLM 实例
+        llm = _get_llm()
+        logger.info("成功获取 LLM 实例")
+        
+        # 尝试生成简单的建议，测试 LLM 连接
+        try:
+            recommendations = await generate_ai_recommendations(
+                total_expense=10000.0,
+                average_monthly_spending=3333.33,
+                top_categories="餐饮美食: 3000元 (30%), 交通出行: 1500元 (15%), 居住: 5000元 (50%)",
+                recent_transactions="餐厅: 100元, 出租车: 30元, 超市: 200元"
+            )
+            
+            if recommendations:
+                logger.info(f"LLM 连接成功，生成了 {len(recommendations)} 条建议")
+                return {
+                    "status": "success",
+                    "message": "LLM 连接成功",
+                    "recommendations_count": len(recommendations),
+                    "example_recommendation": recommendations[0].title if recommendations else None
+                }
+            else:
+                logger.warning("LLM 连接成功，但未生成建议")
+                return {
+                    "status": "warning",
+                    "message": "LLM 连接成功，但未生成建议",
+                    "recommendations_count": 0
+                }
+        except Exception as e:
+            logger.error(f"LLM 测试调用失败: {e}")
+            return {
+                "status": "error",
+                "message": f"LLM 连接测试失败: {str(e)}"
+            }
+    except Exception as e:
+        logger.error(f"获取 LLM 实例失败: {e}")
+        return {
+            "status": "error",
+            "message": f"获取 LLM 实例失败: {str(e)}"
+        }
 
 
 async def generate_insights(

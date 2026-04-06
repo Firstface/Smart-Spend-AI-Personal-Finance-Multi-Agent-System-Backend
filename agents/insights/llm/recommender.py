@@ -9,7 +9,7 @@ LLM 智能建议生成器。
 """
 import os
 import logging
-from typing import List, Optional
+from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -34,16 +34,16 @@ RECOMMENDATION_PROMPT = ChatPromptTemplate.from_messages([
 5. 建议应多样化，覆盖不同的财务方面
 
 输出格式（严格 JSON）：
-{{
+{{{{
   "recommendations": [
-    {{
+    {{{{
       "type": "...",
       "title": "...",
       "description": "...",
       "priority": "..."
-    }}
+    }}}}
   ]
-}}"""),
+}}}}"""),
     ("human", """月度财务摘要：
 - 总支出：{total_expense:.2f}元
 - 月均支出：{average_monthly_spending:.2f}元
