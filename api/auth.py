@@ -72,7 +72,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
             id=uuid.uuid4(),
             username=body.username,
             email=body.email,
-            hashed_password=_hash_password(body.password),
+            password_hash=_hash_password(body.password),
         )
         db.add(user)
         db.commit()
@@ -95,7 +95,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.email == body.email).first()
-        if not user or not _verify_password(body.password, user.hashed_password):
+        if not user or not _verify_password(body.password, user.password_hash):
             raise HTTPException(status_code=401, detail="邮箱或密码错误")
 
         token = _create_token(str(user.id), user.email)

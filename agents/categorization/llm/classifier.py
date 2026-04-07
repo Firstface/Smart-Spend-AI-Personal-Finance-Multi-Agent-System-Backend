@@ -43,7 +43,7 @@ CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
 6. 不要根据金额大小推断分类，只根据商家名和描述内容
 
 输出格式（严格 JSON）：
-{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0}}"""),
+{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0}}}}"""),
     ("human", "商家：{counterparty}\n商品描述：{description}"),
 ])
 

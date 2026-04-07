@@ -44,11 +44,17 @@ from api.upload import router as upload_router
 from api.transactions import router as transactions_router
 from api.review import router as review_router
 from api.chat import router as chat_router
-from api.education import router as education_router
 
 app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(transactions_router)
 app.include_router(review_router)
 app.include_router(chat_router)
-app.include_router(education_router)
+
+# Education router (optional — guarded for version compatibility)
+try:
+    from api.education import router as education_router
+    app.include_router(education_router)
+except Exception as _e:
+    import logging as _l
+    _l.getLogger(__name__).warning(f"Education router skipped: {_e}")

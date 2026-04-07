@@ -18,6 +18,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from database import SessionLocal
 from schemas.transaction import (
     TransactionRaw, CategorizedTransaction,
     ClassificationResult, CategoryEnum, DirectionEnum,
@@ -127,9 +128,14 @@ def _save_batch(
     user_id: str,
     results: List[CategorizedTransaction],
 ) -> List[CategorizedTransaction]:
-    """批量写入 transactions 和 review_queue，返回需审查的子集"""
+    """批量写入 transactions 和 review_queue，返回需审查的子集。
+    使用独立 session 避免长时间 LLM 调用后连接超时。
+    """
     review_queue = []
+    fresh_db = SessionLocal()
     try:
+        # Pass 1: insert + commit all transactions first
+        review_needed: list = []
         for cat_txn in results:
             txn_id = uuid.uuid4()
             db_txn = Transaction(
@@ -154,25 +160,35 @@ def _save_batch(
                 ),
                 needs_review=cat_txn.needs_review,
             )
-            db.add(db_txn)
+            fresh_db.add(db_txn)
             cat_txn.id = str(txn_id)
-
             if cat_txn.needs_review:
-                db.add(ReviewItem(
-                    transaction_id=txn_id,
-                    user_id=user_id,
-                    suggested_category=cat_txn.category.value,
-                    confidence=cat_txn.confidence,
-                    evidence=cat_txn.evidence,
-                    status="pending",
-                ))
-                review_queue.append(cat_txn)
+                review_needed.append((txn_id, cat_txn))
 
-        db.commit()
+        # Commit transactions first — FK constraint on review_queue requires
+        # the referenced transaction rows to already be committed
+        fresh_db.commit()
+
+        # Pass 2: insert review_queue rows in a new transaction
+        for txn_id, cat_txn in review_needed:
+            fresh_db.add(ReviewItem(
+                transaction_id=txn_id,
+                user_id=user_id,
+                suggested_category=cat_txn.category.value,
+                confidence=cat_txn.confidence,
+                evidence=cat_txn.evidence,
+                status="pending",
+            ))
+            review_queue.append(cat_txn)
+
+        if review_needed:
+            fresh_db.commit()
     except Exception as e:
-        db.rollback()
+        fresh_db.rollback()
         logger.error(f"批量写入数据库失败: {e}")
         raise
+    finally:
+        fresh_db.close()
     return review_queue
 
 
