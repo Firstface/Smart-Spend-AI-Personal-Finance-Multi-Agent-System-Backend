@@ -1,10 +1,10 @@
 """
-POST /api/review/{transaction_id} — 人工审查（HITL 人在回路）。
+POST /api/review/{transaction_id} — Human review (HITL — Human-in-the-Loop).
 
-课程对应：
-- Human-Reflection Pattern（Day2 PPT Slide 49）
-- IMDA 人类参与度 Level 3：AI 给建议，人做最终决策
-- 用户纠正反馈作为持续学习信号写回数据库
+Course reference:
+- Human-Reflection Pattern (Day2 PPT Slide 49)
+- IMDA Human Involvement Level 3: AI makes suggestions, human makes final decision
+- User correction feedback is written back to the database as a continuous learning signal
 """
 import logging
 from datetime import datetime, timezone
@@ -29,12 +29,12 @@ def review_transaction(
     db: Session = Depends(get_db),
 ):
     """
-    确认或纠正一条交易的分类结果。
+    Confirm or correct the classification result for a transaction.
 
-    action="confirm" → 确认 AI 分类，清除待审查标记
-    action="correct" → 用 corrected_category 覆盖原分类，置信度设为 1.0
+    action="confirm" → Accept AI classification, clear the needs_review flag
+    action="correct" → Overwrite with corrected_category, set confidence to 1.0
     """
-    # ── 查找交易 ───────────────────────────────────────────────────────────────
+    # ── Find transaction ───────────────────────────────────────────────────────
     txn = (
         db.query(Transaction)
         .filter(
@@ -44,9 +44,9 @@ def review_transaction(
         .first()
     )
     if not txn:
-        raise HTTPException(status_code=404, detail="交易不存在或无权访问")
+        raise HTTPException(status_code=404, detail="Transaction not found or access denied")
 
-    # ── 关联审查记录 ───────────────────────────────────────────────────────────
+    # ── Find associated review record ──────────────────────────────────────────
     review = (
         db.query(ReviewItem)
         .filter(ReviewItem.transaction_id == transaction_id)
@@ -73,7 +73,7 @@ def review_transaction(
             txn.decision_source = "user_corrected"
             txn.needs_review = False
             txn.confidence = 1.0
-            txn.evidence = f"用户手动纠正: {old_category} → {body.corrected_category.value}"
+            txn.evidence = f"Manually corrected by user: {old_category} → {body.corrected_category.value}"
 
             if review:
                 review.status = "corrected"
@@ -89,7 +89,7 @@ def review_transaction(
 
     except Exception as e:
         db.rollback()
-        logger.error(f"审查写入失败: {e}")
-        raise HTTPException(status_code=500, detail=f"审查更新失败: {str(e)}")
+        logger.error(f"Review write failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Review update failed: {str(e)}")
 
     return {"status": "updated", "transaction_id": transaction_id}

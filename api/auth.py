@@ -1,11 +1,11 @@
 """
-POST /api/auth/register — 注册
-POST /api/auth/login    — 登录
+POST /api/auth/register — User registration
+POST /api/auth/login    — User login
 
-简化版 JWT 鉴权：
-- bcrypt 哈希密码（passlib）
-- python-jose 签发 / 验证 JWT，过期时间 24 小时
-- 返回 token + user 对象供前端存入 localStorage
+Simplified JWT authentication:
+- bcrypt password hashing (passlib)
+- python-jose JWT issuance / verification, 24-hour expiry
+- Returns token + user object for frontend to store in localStorage
 """
 import os
 import uuid
@@ -22,7 +22,7 @@ from schemas.transaction import RegisterRequest, LoginRequest, UserOut, AuthResp
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# ── 密码哈希上下文 ──────────────────────────────────────────────────────────────
+# ── Password hashing context ────────────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "smartspend-secret-key-2026")
@@ -45,28 +45,28 @@ def _create_token(user_id: str, email: str) -> str:
 
 
 def get_current_user_id(token: str) -> str:
-    """从 JWT token 中解析 user_id（供其他路由调用）"""
+    """Extract user_id from JWT token (called by other routes)."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload["sub"]
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token 无效或已过期",
+            detail="Token is invalid or expired",
         )
 
 
-# ── 注册 ───────────────────────────────────────────────────────────────────────
+# ── Register ────────────────────────────────────────────────────────────────────
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
     try:
-        # 检查邮箱重复
+        # Check for duplicate email
         if db.query(User).filter(User.email == body.email).first():
-            raise HTTPException(status_code=400, detail="该邮箱已被注册")
+            raise HTTPException(status_code=400, detail="This email is already registered")
 
-        # 检查用户名重复
+        # Check for duplicate username
         if db.query(User).filter(User.username == body.username).first():
-            raise HTTPException(status_code=400, detail="该用户名已被使用")
+            raise HTTPException(status_code=400, detail="This username is already taken")
 
         user = User(
             id=uuid.uuid4(),
@@ -87,16 +87,16 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"注册失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 
-# ── 登录 ───────────────────────────────────────────────────────────────────────
+# ── Login ───────────────────────────────────────────────────────────────────────
 @router.post("/login", response_model=AuthResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.email == body.email).first()
         if not user or not _verify_password(body.password, user.password_hash):
-            raise HTTPException(status_code=401, detail="邮箱或密码错误")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
 
         token = _create_token(str(user.id), user.email)
         return AuthResponse(
@@ -106,4 +106,4 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")

@@ -1,8 +1,8 @@
 """
-POST /api/upload — 文件上传 + 批量分类。
+POST /api/upload — File upload + batch classification.
 
-接受 multipart/form-data，字段名 file，限制 10 MB。
-流程：解析文件 → 跑六层分类管线 → 写入数据库 → 返回统计+结果。
+Accepts multipart/form-data with field name 'file', max 10 MB.
+Flow: parse file → run six-layer classification pipeline → write to database → return stats + results.
 """
 import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
@@ -27,15 +27,15 @@ async def upload_file(
     db: Session = Depends(get_db),
 ):
     """
-    上传微信支付 Excel（.xlsx）或支付宝账单 CSV（.csv），
-    批量分类后写入数据库，返回分类统计和结果列表。
+    Upload a WeChat Pay Excel (.xlsx) or Alipay bill CSV (.csv),
+    batch-classify, write to database, and return classification stats and results.
     """
-    # ── 文件大小检查 ───────────────────────────────────────────────────────────
+    # ── File size check ────────────────────────────────────────────────────────
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"文件过大（{len(content)//1024} KB），最大支持 10 MB",
+            detail=f"File too large ({len(content)//1024} KB), maximum supported size is 10 MB",
         )
 
     logger.info(
@@ -43,29 +43,29 @@ async def upload_file(
         f"size={len(content)} bytes"
     )
 
-    # ── 解析文件 ───────────────────────────────────────────────────────────────
+    # ── Parse file ─────────────────────────────────────────────────────────────
     try:
         raw_txns = parse_file(file.filename, content)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"文件解析异常: {e}")
-        raise HTTPException(status_code=400, detail=f"文件解析失败: {str(e)}")
+        logger.error(f"File parse error: {e}")
+        raise HTTPException(status_code=400, detail=f"File parsing failed: {str(e)}")
 
     if not raw_txns:
-        raise HTTPException(status_code=400, detail="文件中没有有效交易记录")
+        raise HTTPException(status_code=400, detail="No valid transactions found in the file")
 
-    logger.info(f"解析完成: {len(raw_txns)} 条原始交易")
+    logger.info(f"Parse complete: {len(raw_txns)} raw transactions")
 
-    # ── 批量分类 ───────────────────────────────────────────────────────────────
+    # ── Batch classification ───────────────────────────────────────────────────
     try:
         result = await run_batch(raw_txns, user_id, db)
     except Exception as e:
-        logger.error(f"分类管线异常: {e}")
-        raise HTTPException(status_code=500, detail=f"分类处理失败: {str(e)}")
+        logger.error(f"Classification pipeline error: {e}")
+        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
 
     logger.info(
-        f"分类完成 | total={result.stats['total']} "
+        f"Classification complete | total={result.stats['total']} "
         f"needs_review={result.stats['needs_review']} "
         f"llm_fallback={result.stats.get('llm_fallback', 0)}"
     )

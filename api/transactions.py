@@ -1,12 +1,12 @@
 """
-GET /api/transactions — 分页查询已分类交易。
+GET /api/transactions — Paginated query of classified transactions.
 
-Query 参数：
-  page     int   默认 1
-  size     int   默认 20，最大 100
+Query parameters:
+  page     int   default 1
+  size     int   default 20, max 100
   filter   str   all | review | reviewed
-  search   str   商家名模糊搜索
-  category str   按类别过滤（如 "餐饮美食"）
+  search   str   fuzzy search by merchant name
+  category str   filter by category (e.g. "餐饮美食")
 """
 import logging
 from typing import Optional
@@ -34,19 +34,19 @@ def get_transactions(
     db: Session = Depends(get_db),
 ):
     """
-    分页返回已分类交易，支持过滤、搜索和类别筛选。
-    同时返回全量统计（不受分页影响）。
+    Return classified transactions with pagination, supporting filter, search, and category options.
+    Also returns aggregate statistics (unaffected by pagination).
     """
-    # ── 构建查询 ───────────────────────────────────────────────────────────────
+    # ── Build query ────────────────────────────────────────────────────────────
     q = db.query(Transaction).filter(Transaction.user_id == user_id)
 
-    # 过滤模式
+    # Filter mode
     if filter == "review":
         q = q.filter(Transaction.needs_review == True)
     elif filter == "reviewed":
         q = q.filter(Transaction.needs_review == False)
 
-    # 商家名模糊搜索
+    # Fuzzy merchant name search
     if search:
         q = q.filter(
             or_(
@@ -55,14 +55,14 @@ def get_transactions(
             )
         )
 
-    # 类别过滤
+    # Category filter
     if category:
         q = q.filter(Transaction.category == category)
 
-    # 总数
+    # Total count
     total = q.count()
 
-    # 排序 + 分页
+    # Sort + paginate
     items_orm = (
         q.order_by(Transaction.transaction_time.desc())
         .offset((page - 1) * size)
@@ -72,7 +72,7 @@ def get_transactions(
 
     items = [_orm_to_schema(r) for r in items_orm]
 
-    # ── 全量统计（不受过滤影响，基于用户所有数据）────────────────────────────
+    # ── Aggregate stats (based on all user data, unaffected by filters) ────────
     stats = _build_stats(db, user_id)
 
     logger.info(
@@ -89,7 +89,7 @@ def get_transactions(
     }
 
 
-# ── 私有辅助 ───────────────────────────────────────────────────────────────────
+# ── Private helpers ─────────────────────────────────────────────────────────────
 def _orm_to_schema(row: Transaction) -> CategorizedTransaction:
     return CategorizedTransaction(
         id=str(row.id),
@@ -111,7 +111,7 @@ def _orm_to_schema(row: Transaction) -> CategorizedTransaction:
 
 
 def _build_stats(db: Session, user_id: str) -> dict:
-    """计算用户全部交易的汇总统计"""
+    """Compute aggregate statistics for all of the user's transactions."""
     all_rows = (
         db.query(Transaction)
         .filter(Transaction.user_id == user_id)

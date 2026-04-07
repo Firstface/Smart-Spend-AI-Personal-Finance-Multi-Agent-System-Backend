@@ -1,12 +1,12 @@
 """
-Smart Spend AI — 分类Agent后端主入口。
-FastAPI 应用，挂载所有路由，配置 CORS 允许前端访问。
+Smart Spend AI — Categorization Agent backend entry point.
+FastAPI application: mounts all routers and configures CORS for frontend access.
 """
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 配置结构化日志
+# Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -15,10 +15,10 @@ logging.basicConfig(
 app = FastAPI(
     title="Smart Spend AI — Categorization Agent",
     version="1.0.0",
-    description="个人财务分类Agent后端：多层规则引擎 + LLM回退 + 自反思循环",
+    description="Personal finance categorization agent backend: multi-layer rule engine + LLM fallback + self-reflection loop",
 )
 
-# CORS 配置：允许前端 localhost:3000 / 5173 / 3001 访问
+# CORS: allow frontend access from localhost:3000 / 5173 / 3001
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
