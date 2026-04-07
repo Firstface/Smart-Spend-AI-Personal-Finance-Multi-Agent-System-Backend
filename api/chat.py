@@ -22,7 +22,7 @@ from api.deps import get_user_id
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger("api.chat")
 
-# Emoji mapping for categories
+# Emoji mapping for categories (keyed by DB value)
 EMOJI_MAP = {
     "餐饮美食": "🍜",
     "交通出行": "🚗",
@@ -34,6 +34,20 @@ EMOJI_MAP = {
     "日用百货": "📦",
     "教育":     "📚",
     "其他":     "❓",
+}
+
+# English display names for categories (DB value → English label)
+CATEGORY_DISPLAY = {
+    "餐饮美食": "Food & Dining",
+    "交通出行": "Transportation",
+    "居住":     "Housing",
+    "购物":     "Shopping",
+    "娱乐休闲": "Entertainment",
+    "订阅服务": "Subscriptions",
+    "医疗健康": "Healthcare",
+    "日用百货": "Daily Essentials",
+    "教育":     "Education",
+    "其他":     "Other",
 }
 
 
@@ -70,10 +84,11 @@ async def chat(
         # ── Step 3: Generate reply message ────────────────────────────────────
         cat_name = cat_txn.category.value if hasattr(cat_txn.category, "value") else str(cat_txn.category)
         emoji = EMOJI_MAP.get(cat_name, "❓")
+        cat_display = CATEGORY_DISPLAY.get(cat_name, cat_name)
 
         reply_lines = [
             f"✅ Recorded: **{cat_txn.counterparty}** ¥{cat_txn.amount:.2f}",
-            f"Category: {emoji} {cat_name} (confidence {cat_txn.confidence:.2f})",
+            f"Category: {emoji} {cat_display} (confidence {cat_txn.confidence:.2f})",
             f"Evidence: {cat_txn.evidence}",
         ]
 

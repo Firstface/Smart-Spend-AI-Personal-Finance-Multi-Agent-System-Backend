@@ -1,7 +1,9 @@
 """
-GET /api/transactions — Paginated query of classified transactions.
+GET    /api/transactions              — Paginated query of classified transactions.
+DELETE /api/transactions/{id}         — Delete a single transaction.
+POST   /api/transactions/bulk-delete  — Delete multiple transactions by ID list.
 
-Query parameters:
+Query parameters (GET):
   page     int   default 1
   size     int   default 20, max 100
   filter   str   all | review | reviewed
@@ -9,13 +11,17 @@ Query parameters:
   category str   filter by category (e.g. "餐饮美食")
 """
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+import uuid as uuid_module
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
 from models.transaction import Transaction
+from models.review_queue import ReviewItem
 from schemas.transaction import CategorizedTransaction, DirectionEnum
 from api.deps import get_user_id
 
@@ -23,6 +29,7 @@ router = APIRouter(prefix="/api", tags=["transactions"])
 logger = logging.getLogger("api.transactions")
 
 
+# ── GET /api/transactions ────────────────────────────────────────────────────────
 @router.get("/transactions")
 def get_transactions(
     page: int = Query(default=1, ge=1),
@@ -87,6 +94,67 @@ def get_transactions(
         "size": size,
         "stats": stats,
     }
+
+
+# ── DELETE /api/transactions/{transaction_id} ────────────────────────────────────
+@router.delete("/transactions/{transaction_id}", status_code=204)
+def delete_transaction(
+    transaction_id: str,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """Delete a single transaction (and its review_queue entry if present)."""
+    txn = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id, Transaction.user_id == user_id)
+        .first()
+    )
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found or access denied")
+
+    # Delete review_queue entry first (FK constraint)
+    db.query(ReviewItem).filter(ReviewItem.transaction_id == transaction_id).delete(synchronize_session=False)
+    db.delete(txn)
+    db.commit()
+
+    logger.info(f"delete_transaction | user={user_id} txn={transaction_id}")
+    return Response(status_code=204)
+
+
+# ── POST /api/transactions/bulk-delete ──────────────────────────────────────────
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+
+@router.post("/transactions/bulk-delete")
+def bulk_delete_transactions(
+    body: BulkDeleteRequest,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """Delete multiple transactions by ID list. Only deletes rows owned by the current user."""
+    if not body.ids:
+        return {"deleted": 0}
+
+    # Verify ownership and collect valid IDs
+    txns = (
+        db.query(Transaction)
+        .filter(Transaction.id.in_(body.ids), Transaction.user_id == user_id)
+        .all()
+    )
+    valid_ids = [str(t.id) for t in txns]
+
+    if valid_ids:
+        db.query(ReviewItem).filter(
+            ReviewItem.transaction_id.in_(valid_ids)
+        ).delete(synchronize_session=False)
+        db.query(Transaction).filter(
+            Transaction.id.in_(valid_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    logger.info(f"bulk_delete | user={user_id} requested={len(body.ids)} deleted={len(valid_ids)}")
+    return {"deleted": len(valid_ids)}
 
 
 # ── Private helpers ─────────────────────────────────────────────────────────────
