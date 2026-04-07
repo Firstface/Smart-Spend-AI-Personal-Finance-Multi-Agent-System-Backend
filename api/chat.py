@@ -1,12 +1,12 @@
 """
-POST /api/chat — 聊天入口（含快速记账）。
+POST /api/chat — Chat entry point (includes quick expense entry).
 
-流程：
-  1. 判断消息是否为快速记账指令（含金额模式）
-  2. 是 → 解析出商家+金额，跑分类管线，写入数据库，返回格式化确认
-  3. 否 → 返回通用回复（后续由教育Agent/规划Agent接管）
+Flow:
+  1. Determine whether the message is a quick expense entry command (contains amount pattern)
+  2. Yes → parse merchant + amount, run classification pipeline, write to DB, return formatted confirmation
+  3. No  → return general reply (to be handled by Education Agent / Planning Agent later)
 
-返回格式：
+Response format:
   { "reply": "...", "type": "quick_entry" | "general", "transaction": {...} }
 """
 import logging
@@ -22,7 +22,7 @@ from api.deps import get_user_id
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger("api.chat")
 
-# emoji 映射
+# Emoji mapping for categories (keyed by DB value)
 EMOJI_MAP = {
     "餐饮美食": "🍜",
     "交通出行": "🚗",
@@ -34,6 +34,20 @@ EMOJI_MAP = {
     "日用百货": "📦",
     "教育":     "📚",
     "其他":     "❓",
+}
+
+# English display names for categories (DB value → English label)
+CATEGORY_DISPLAY = {
+    "餐饮美食": "Food & Dining",
+    "交通出行": "Transportation",
+    "居住":     "Housing",
+    "购物":     "Shopping",
+    "娱乐休闲": "Entertainment",
+    "订阅服务": "Subscriptions",
+    "医疗健康": "Healthcare",
+    "日用百货": "Daily Essentials",
+    "教育":     "Education",
+    "其他":     "Other",
 }
 
 
@@ -49,37 +63,38 @@ async def chat(
 ):
     message = body.message.strip()
     if not message:
-        return {"reply": "请输入消息", "type": "error"}
+        return {"reply": "Please enter a message", "type": "error"}
 
     logger.info(f"chat | user={user_id} message='{message[:60]}'")
 
-    # ── Step 1: 尝试快速记账解析 ───────────────────────────────────────────────
+    # ── Step 1: Attempt quick expense entry parsing ────────────────────────────
     entry_result = await parse_quick_entry(message)
 
     if entry_result.success and entry_result.transaction:
-        # ── Step 2: 跑完整分类管线并写入数据库 ───────────────────────────────
+        # ── Step 2: Run full classification pipeline and write to database ─────
         try:
             cat_txn = await run_single(entry_result.transaction, user_id, db)
         except Exception as e:
             logger.error(f"quick_entry classify failed: {e}")
             return {
-                "reply": f"记账解析成功，但分类写入失败：{str(e)[:80]}\n请稍后重试。",
+                "reply": f"Expense parsed successfully, but classification/save failed: {str(e)[:80]}\nPlease try again later.",
                 "type": "error",
             }
 
-        # ── Step 3: 生成回复消息 ──────────────────────────────────────────────
+        # ── Step 3: Generate reply message ────────────────────────────────────
         cat_name = cat_txn.category.value if hasattr(cat_txn.category, "value") else str(cat_txn.category)
         emoji = EMOJI_MAP.get(cat_name, "❓")
+        cat_display = CATEGORY_DISPLAY.get(cat_name, cat_name)
 
         reply_lines = [
-            f"✅ 已记录：**{cat_txn.counterparty}** ¥{cat_txn.amount:.2f}",
-            f"分类：{emoji} {cat_name}（置信度 {cat_txn.confidence:.2f}）",
-            f"依据：{cat_txn.evidence}",
+            f"✅ Recorded: **{cat_txn.counterparty}** ¥{cat_txn.amount:.2f}",
+            f"Category: {emoji} {cat_display} (confidence {cat_txn.confidence:.2f})",
+            f"Evidence: {cat_txn.evidence}",
         ]
 
         if cat_txn.needs_review:
             reply_lines.append(
-                "\n⚠️ 置信度较低，已加入待审查队列，请前往「分类结果」页确认。"
+                "\n⚠️ Low confidence — added to the review queue. Please visit the Classification page to confirm."
             )
 
         reply = "\n".join(reply_lines)
@@ -96,15 +111,15 @@ async def chat(
             "transaction": cat_txn.model_dump(mode="json"),
         }
 
-    # ── Step 4: 不是记账指令 → 通用回复 ──────────────────────────────────────
+    # ── Step 4: Not an expense entry command → general reply ──────────────────
     general_reply = (
-        f"收到你的消息：「{message}」\n\n"
-        "目前聊天功能支持**快速记账**，例如：\n"
-        "• `星巴克 38元`\n"
+        f"Got your message: \"{message}\"\n\n"
+        "The chat currently supports **quick expense entry**, for example:\n"
+        "• `Starbucks $5.50`\n"
         "• `Grab $12.80`\n"
         "• `Netflix $15.99`\n"
-        "• `午饭 美团 45元`\n\n"
-        "教育助手和规划助手即将上线，敬请期待 🚀"
+        "• `Lunch Meituan $10`\n\n"
+        "Education assistant and planning assistant coming soon 🚀"
     )
 
     return {
