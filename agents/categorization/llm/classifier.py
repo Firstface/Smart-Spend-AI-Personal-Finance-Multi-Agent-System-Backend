@@ -54,14 +54,16 @@ Based on the merchant name and goods description, classify the transaction into 
 
 Strict requirements:
 1. Output JSON only — no other text
-2. category must be exactly one of the category names listed above (full Chinese name)
+2. category must be exactly one of the category names listed above
 3. subcategory is optional — a more specific sub-label (e.g. "milk tea", "taxi"); use null if none
-4. rationale: one sentence explaining the classification reasoning
+4. rationale: one sentence explaining the classification reasoning, and it must be grounded in exact words from input
 5. confidence range 0.0-1.0; use below 0.6 when uncertain — do NOT inflate scores
 6. Do not infer category from amount size — base decision solely on merchant name and description
+7. If evidence from input is insufficient, return category="Other", confidence<=0.4, rationale="Insufficient evidence from input"
+8. Never fabricate items not present in input (e.g. do not invent "milk tea" if not mentioned)
 
 Output format (strict JSON):
-{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0}}}}"""),
+{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0, "evidence_terms": ["..."]}}}}"""),
     ("human", "Merchant: {{counterparty}}\nGoods description: {{description}}"),
 ])
 
@@ -146,6 +148,7 @@ async def llm_classify(
     - On JSON parse failure, returns safe default (OTHER, conf=0.3)
     """
     try:
+        other_label = CategoryEnum.OTHER.value
         llm = _get_llm()
         if llm is None:
             return (CategoryEnum.OTHER, "LLM unavailable: no valid provider configured", 0.3)
@@ -158,20 +161,43 @@ async def llm_classify(
         })
 
         # ── Output validation (Guardrail) ─────────────────────────────────────
-        cat_str = result.get("category", "其他")
+        cat_str = result.get("category", other_label)
         valid_cats = {e.value for e in CategoryEnum}
         if cat_str not in valid_cats:
             logger.warning(
-                f"LLM returned invalid category '{cat_str}', downgrading to '其他'."
+                f"LLM returned invalid category '{cat_str}', downgrading to '{other_label}'."
                 f" counterparty={counterparty}"
             )
-            cat_str = "其他"
+            cat_str = other_label
 
         confidence = float(result.get("confidence", 0.5))
         confidence = max(0.0, min(1.0, confidence))
 
         rationale = result.get("rationale", "LLM classification")
         subcategory = result.get("subcategory") or None
+
+        # Evidence guard: model must cite terms that actually appear in input.
+        observed_text = f"{counterparty} {description or ''}".lower()
+        evidence_terms_raw = result.get("evidence_terms", [])
+        evidence_terms = []
+        if isinstance(evidence_terms_raw, list):
+            evidence_terms = [str(t).strip().lower() for t in evidence_terms_raw if str(t).strip()]
+
+        if cat_str != other_label:
+            has_valid_evidence = False
+            if evidence_terms:
+                has_valid_evidence = any(term in observed_text for term in evidence_terms)
+            else:
+                has_valid_evidence = counterparty.lower() in rationale.lower() or (description or "").lower() in rationale.lower()
+
+            if not has_valid_evidence:
+                logger.warning(
+                    f"LLM evidence guard triggered, downgrade to OTHER. counterparty={counterparty} rationale={rationale}"
+                )
+                cat_str = other_label
+                confidence = min(confidence, 0.35)
+                rationale = "Insufficient evidence from input"
+                subcategory = None
 
         logger.info(
             f"llm_classify: '{counterparty}' → {cat_str} "

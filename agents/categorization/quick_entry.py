@@ -45,6 +45,26 @@ AMOUNT_PATTERNS = [
 ]
 
 
+LOW_QUALITY_MERCHANT_PATTERNS = [
+    re.compile(r"我|今天|刚刚|中午|晚上|早上|去|吃了|买了|花了|用了|付款|支付", re.I),
+]
+
+
+def _detect_amount(message: str) -> Optional[float]:
+    text = message.strip()
+    for pattern in AMOUNT_PATTERNS:
+        m = pattern.search(text)
+        if not m:
+            continue
+        try:
+            val = float(m.group(1))
+            if val > 0:
+                return val
+        except ValueError:
+            continue
+    return None
+
+
 def try_regex_parse(message: str) -> Optional[QuickEntryResult]:
     """
     Regex parsing: attempt to extract merchant and amount from short text.
@@ -80,6 +100,11 @@ def try_regex_parse(message: str) -> Optional[QuickEntryResult]:
     before = re.sub(r'[\$¥￥]', '', before).strip()
     # Strip common connective words
     before = re.sub(r'\s*(花了|花|共|合计|总计|支付了|付了)\s*', ' ', before).strip()
+
+    # Narrative sentence cleanup: keep core merchant phrase if present.
+    narrative_match = re.search(r'(?:我|今天|刚刚|中午|晚上|早上)?(?:在|去)(.+?)(?:吃|买|消费|花|付|支付|点了)', before)
+    if narrative_match:
+        before = narrative_match.group(1).strip()
 
     if not before:
         return None
@@ -118,10 +143,19 @@ async def try_llm_parse(message: str) -> Optional[QuickEntryResult]:
     from agents.categorization.llm.classifier import _get_llm
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", """Determine whether the user input is a simple expense entry command.
+        ("system", """Determine whether the user input is a transaction entry for bookkeeping.
 
-If yes, extract the merchant name and amount.
-If no (question, small talk, math, etc.), return is_transaction=false.
+If yes:
+1. Extract merchant as the most specific store/person/payee name.
+2. Extract amount as a positive number.
+3. Remove temporal or narrative fillers from merchant (e.g. 我/今天/中午/去/吃了/买了).
+4. Put remaining useful context into description.
+
+Examples:
+- "我中午去重庆小面吃了碗30块钱的面" -> merchant="重庆小面", amount=30, description="中午吃了一碗面"
+- "song 1" -> merchant="song", amount=1, description=null
+
+If no (question, small talk, planning request, etc.), return is_transaction=false.
 
 Output JSON only — no other text:
 {{"is_transaction": true, "merchant": "merchant name", "amount": 12.80, "currency": "CNY", "description": "optional description"}}
@@ -155,6 +189,19 @@ or:
     if not merchant or amount <= 0:
         return None
 
+    # Validation guard: merchant should appear in source text; amount should align with input amount when present.
+    source_text = message.strip().lower()
+    if merchant.lower() not in source_text:
+        logger.warning(f"LLM parse rejected: merchant not found in input. merchant='{merchant}' message='{message}'")
+        return None
+
+    expected_amount = _detect_amount(message)
+    if expected_amount is not None and abs(expected_amount - amount) > 0.01:
+        logger.warning(
+            f"LLM parse rejected: amount mismatch. parsed={amount} expected={expected_amount} message='{message}'"
+        )
+        return None
+
     txn = TransactionRaw(
         source="manual",
         transaction_time=datetime.now(),
@@ -168,6 +215,27 @@ or:
     return QuickEntryResult(success=True, transaction=txn, reply_message="")
 
 
+def _is_low_quality_regex_result(message: str, result: QuickEntryResult) -> bool:
+    if not result.transaction:
+        return True
+
+    merchant = (result.transaction.counterparty or "").strip()
+    description = (result.transaction.goods_description or "").strip()
+
+    if not merchant:
+        return True
+
+    # Narrative phrases often indicate regex captured too much context as merchant.
+    if any(p.search(merchant) for p in LOW_QUALITY_MERCHANT_PATTERNS):
+        return True
+
+    # Very short raw inputs like "song 1" / "data 1" are better handled by LLM parser.
+    if re.fullmatch(r"[A-Za-z0-9_\-\s]{1,12}", message.strip()) and not description:
+        return True
+
+    return False
+
+
 async def parse_quick_entry(message: str) -> QuickEntryResult:
     """
     Quick-entry main entry point: regex first, LLM fallback.
@@ -177,14 +245,18 @@ async def parse_quick_entry(message: str) -> QuickEntryResult:
       success=False → not an expense entry command; caller returns a general reply
     """
     # Layer 1: regex (zero cost)
-    result = try_regex_parse(message)
-    if result:
-        return result
+    regex_result = try_regex_parse(message)
+    if regex_result and not _is_low_quality_regex_result(message, regex_result):
+        return regex_result
 
-    # Layer 2: LLM (has cost, only when regex fails)
-    result = await try_llm_parse(message)
-    if result:
-        return result
+    # Layer 2: LLM (has cost) — also used to override low-quality regex parses
+    llm_result = await try_llm_parse(message)
+    if llm_result:
+        return llm_result
+
+    # If regex succeeded but LLM failed/unavailable, keep regex result as graceful fallback.
+    if regex_result:
+        return regex_result
 
     # Not an expense entry command
     return QuickEntryResult(

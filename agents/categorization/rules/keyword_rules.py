@@ -13,7 +13,7 @@ from schemas.transaction import CategoryEnum
 KEYWORD_RULES: list[tuple[re.Pattern, CategoryEnum, str]] = [
     # Food & Dining
     (re.compile(
-        r"(外卖|堂食|餐厅|饭店|食堂|奶茶|咖啡|火锅|烧烤|面条|粥|寿司|"
+        r"(外卖|堂食|餐厅|饭店|食堂|奶茶|咖啡|火锅|烧烤|面条|小面|面馆|米线|拉面|粥|寿司|"
         r"快餐|小吃|甜品|蛋糕|面包|饺子|汤圆|早餐|午餐|晚餐|宵夜|"
         r"restaurant|cafe|coffee|bakery|bubble tea|hotpot)",
         re.I

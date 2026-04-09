@@ -197,7 +197,11 @@ def _save_single(
     user_id: str,
     cat_txn: CategorizedTransaction,
 ) -> None:
-    """Write a single transaction record to the database."""
+    """Write a single transaction record to the database.
+
+    To avoid FK timing issues, persist the transaction first, then add review_queue
+    in a second DB step when needed.
+    """
     try:
         txn_id = uuid.uuid4()
         db_txn = Transaction(
@@ -223,19 +227,26 @@ def _save_single(
             needs_review=cat_txn.needs_review,
         )
         db.add(db_txn)
-
-        if cat_txn.needs_review:
-            db.add(ReviewItem(
-                transaction_id=txn_id,
-                user_id=user_id,
-                suggested_category=cat_txn.category.value,
-                confidence=cat_txn.confidence,
-                evidence=cat_txn.evidence,
-                status="pending",
-            ))
-
+        # Step 1: commit transaction first so FK target definitely exists.
         db.commit()
         cat_txn.id = str(txn_id)
+
+        # Step 2: write review_queue separately (if needed).
+        if cat_txn.needs_review:
+            try:
+                db.add(ReviewItem(
+                    transaction_id=txn_id,
+                    user_id=user_id,
+                    suggested_category=cat_txn.category.value,
+                    confidence=cat_txn.confidence,
+                    evidence=cat_txn.evidence,
+                    status="pending",
+                ))
+                db.commit()
+            except Exception as review_err:
+                db.rollback()
+                # Never fail quick-entry success response because review_queue write failed.
+                logger.error(f"Review queue insert failed for transaction_id={txn_id}: {review_err}")
     except Exception as e:
         db.rollback()
         logger.error(f"Single transaction database write failed: {e}")
