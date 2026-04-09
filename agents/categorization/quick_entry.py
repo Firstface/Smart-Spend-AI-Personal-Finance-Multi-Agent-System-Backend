@@ -132,6 +132,10 @@ or:
 
     try:
         llm = _get_llm()
+        if llm is None:
+            logger.warning("Quick-entry LLM parse skipped: no available LLM provider")
+            return None
+
         chain = prompt | llm | JsonOutputParser()
         result = await chain.ainvoke({"message": message})
     except Exception as e:

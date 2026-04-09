@@ -16,9 +16,11 @@ Dual LLM path:
 import os
 import logging
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -30,6 +32,10 @@ from agents.categorization.config import (
 )
 
 logger = logging.getLogger("categorization.llm")
+
+# Ensure .env is loaded even if uvicorn is started from a different cwd.
+BACKEND_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(BACKEND_ROOT / ".env", override=False)
 
 
 @lru_cache(maxsize=1)
@@ -69,26 +75,27 @@ def classify_transaction_tool(counterparty: str, description: str) -> dict:
 
 
 # ── LLM factory: OpenAI preferred, Groq fallback ───────────────────────────────
-def _get_llm():
+@lru_cache(maxsize=8)
+def _get_llm_from_keys(openai_key: str, groq_key: str):
     """
     Returns an available LLM instance.
     Prefers gpt-4o-mini (OpenAI); falls back to llama-3.1-8b-instant (Groq) if no key.
     """
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    groq_key = os.getenv("GROQ_API_KEY", "")
-
-    if openai_key and openai_key != "sk-xxx":
+    def _build_openai(api_key: Optional[str] = None):
         from langchain_openai import ChatOpenAI
-        logger.debug("LLM path: OpenAI gpt-4o-mini")
         http_client, http_async_client = _build_http_clients()
         return ChatOpenAI(
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
-            api_key=openai_key,
+            api_key=api_key,
             http_client=http_client,
             http_async_client=http_async_client,
         )
+
+    if openai_key and openai_key != "sk-xxx":
+        logger.debug("LLM path: OpenAI gpt-4o-mini")
+        return _build_openai(openai_key)
     elif groq_key:
         try:
             from langchain_groq import ChatGroq
@@ -100,17 +107,28 @@ def _get_llm():
                 api_key=groq_key,
             )
         except ImportError:
-            logger.warning("langchain_groq not installed, falling back to OpenAI (even with placeholder key)")
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(
-                model=LLM_MODEL,
-                temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS,
-            )
+            logger.warning("langchain_groq not installed; trying OpenAI fallback")
+            if openai_key and openai_key != "sk-xxx":
+                return _build_openai(openai_key)
+            logger.warning("No valid OpenAI key available; LLM fallback disabled")
+            return None
     else:
-        from langchain_openai import ChatOpenAI
-        logger.warning("No valid LLM key detected, using default OpenAI (may fail)")
-        return ChatOpenAI(model=LLM_MODEL, temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS)
+        logger.warning("No valid LLM key detected; LLM fallback disabled")
+        return None
+
+
+def _sanitize_key(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    # Accept keys with accidental spaces/quotes in .env
+    return raw.strip().strip('"').strip("'")
+
+
+def _get_llm():
+    """Resolve provider with runtime env values: OpenAI first, then Groq fallback."""
+    openai_key = _sanitize_key(os.getenv("OPENAI_API_KEY", ""))
+    groq_key = _sanitize_key(os.getenv("GROQ_API_KEY", ""))
+    return _get_llm_from_keys(openai_key, groq_key)
 
 
 # ── Main classification function ────────────────────────────────────────────────
@@ -127,10 +145,12 @@ async def llm_classify(
     - confidence is clamped to [0.0, 1.0]
     - On JSON parse failure, returns safe default (OTHER, conf=0.3)
     """
-    llm = _get_llm()
-    chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
-
     try:
+        llm = _get_llm()
+        if llm is None:
+            return (CategoryEnum.OTHER, "LLM unavailable: no valid provider configured", 0.3)
+
+        chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
         result = await chain.ainvoke({
             "categories": CATEGORIES_DISPLAY,
             "counterparty": counterparty,
