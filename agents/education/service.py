@@ -11,8 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from .retrieval import retrieve_documents
 from .refusal import check_refusal
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -33,25 +33,24 @@ SessionLocal = sessionmaker(bind=engine)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+RETRIEVAL_INITIAL_K = int(os.getenv("RETRIEVAL_INITIAL_K", "8"))
+RETRIEVAL_MAX_K = int(os.getenv("RETRIEVAL_MAX_K", "3"))
+RETRIEVAL_DISTANCE_THRESHOLD = float(
+    os.getenv("RETRIEVAL_DISTANCE_THRESHOLD", "1.05")
+)
 
-def is_not_grounded(results: list[dict[str, Any]], max_distance: float = 1.05) -> bool:
-    """
-    判断检索结果是否足够可靠。
-    规则：
-    - 没有结果 -> not grounded
-    - 最佳结果距离太大 -> not grounded
-    """
-    if not results:
-        return True
 
-    best_distance = results[0]["distance"]
-    return best_distance > max_distance
+def is_not_grounded(results: list[dict[str, Any]]) -> bool:
+    """
+    Return True when no retrieved chunk passes the retrieval threshold.
+    """
+    return len(results) == 0
 
 
 def build_context_block(docs: list[dict[str, Any]]) -> str:
     """
-    把检索结果拼成给 LLM 的上下文。
-    每段都带 doc_id 和 title，方便模型做 grounded answer。
+    Build the retrieval context block for the LLM.
+    Each chunk includes doc_id and title so the answer stays grounded.
     """
     context_parts = []
 
@@ -73,12 +72,13 @@ def build_context_block(docs: list[dict[str, Any]]) -> str:
 
 def build_answer_with_gpt(question: str, docs: list[dict[str, Any]]) -> str:
     """
-    使用 GPT 基于检索结果重写 answer。
-    要求：
-    - 只能依据提供的 docs 回答
-    - 不允许补充检索外知识
-    - 信息不足时直接说不知道
-    - 不在 answer 里硬塞 citation 标记，citation 仍由后端结构化返回
+    Use GPT to rewrite the final answer based only on retrieved documents.
+
+    Requirements:
+    - Answer only from the provided docs
+    - Do not add outside knowledge
+    - Say clearly when the docs are insufficient
+    - Keep citations out of the answer text itself
     """
     if not docs:
         return "Sorry, I do not have enough information to answer this question."
@@ -132,14 +132,12 @@ Please write the final answer based only on the knowledge sources above.
 
     except Exception as e:
         print(f"OpenAI generation failed: {e}")
-
-        # 降级方案：LLM 失败时退回到简单拼接，避免整个服务挂掉
         return fallback_build_answer(docs)
 
 
 def fallback_build_answer(docs: list[dict[str, Any]]) -> str:
     """
-    LLM 失败时的兜底 answer。
+    Build a simple fallback answer when LLM generation fails.
     """
     if not docs:
         return "Sorry, I do not have enough information to answer this question."
@@ -151,63 +149,101 @@ def fallback_build_answer(docs: list[dict[str, Any]]) -> str:
 
     second_doc = docs[1]["content"].strip()
 
-    answer = (
+    return (
         f"Based on the available knowledge, {top_doc} "
         f"In addition, related guidance suggests that {second_doc.lower()}"
     )
-    return answer
 
 
-def build_citations(docs: list[dict[str, Any]]) -> list[dict[str, str]]:
+def build_citations(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    生成 citations，适合前端显示和日志存储。
-    去重后返回：
-    [
-      {"doc_id": "Doc_01", "title": "Budgeting Basics"},
-      ...
-    ]
+    Build deduplicated citations for frontend display.
+    Each citation includes doc_id, title, chunk_index, and distance.
     """
-    citations = []
-    seen = set()
+    citations: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
 
     for doc in docs:
-        doc_id = doc["doc_id"]
-        if doc_id in seen:
+        key = (doc["doc_id"], doc["chunk_index"])
+        if key in seen:
             continue
 
         citations.append({
             "doc_id": doc["doc_id"],
-            "title": doc["doc_title"]
+            "title": doc["doc_title"],
+            "chunk_index": doc["chunk_index"],
+            "distance": round(float(doc["distance"]), 4),
         })
-        seen.add(doc_id)
+        seen.add(key)
 
     return citations
 
 
 def compute_retrieval_confidence(results: list[dict[str, Any]]) -> float:
     """
-    把 distance 粗略映射成 confidence。
-    distance 越小，confidence 越高。
+    Map distance to a simple confidence score.
+    Smaller distance means higher confidence.
     """
     if not results:
         return 0.0
 
     best_distance = results[0]["distance"]
-
     confidence = max(0.0, min(1.0, 1.2 - best_distance))
     return round(confidence, 4)
+
+
+def build_retrieval_metadata(
+    results: list[dict[str, Any]],
+    initial_k: int,
+    max_k: int,
+    threshold: float,
+) -> dict[str, Any]:
+    """
+    Build retrieval metadata for the structured API response.
+    """
+    return {
+        "initial_k": initial_k,
+        "max_k": max_k,
+        "used_k": len(results),
+        "threshold": threshold,
+        "confidence": compute_retrieval_confidence(results),
+        "top_distance": round(float(results[0]["distance"]), 4) if results else None,
+    }
+
+
+def extract_retrieved_doc_ids(results: list[dict[str, Any]]) -> list[str]:
+    """
+    Extract unique doc_ids from retrieved results for logging.
+    """
+    doc_ids: list[str] = []
+    seen: set[str] = set()
+
+    for doc in results:
+        doc_id = doc["doc_id"]
+        if doc_id in seen:
+            continue
+        doc_ids.append(doc_id)
+        seen.add(doc_id)
+
+    return doc_ids
 
 
 def log_education_result(
     question: str,
     answer: str,
-    citations: list[dict[str, str]],
+    citations: list[dict[str, Any]],
     refused: bool,
     retrieval_confidence: float,
     user_id: str | None = None,
+    status: str | None = None,
+    refusal_type: str | None = None,
+    retrieved_doc_ids: list[str] | None = None,
+    retrieved_count: int | None = None,
+    top_distance: float | None = None,
+    retrieval_threshold: float | None = None,
 ) -> None:
     """
-    记录到 education_logs。
+    Write one education result row into education_logs.
     """
     db = SessionLocal()
     try:
@@ -218,7 +254,13 @@ def log_education_result(
                 answer,
                 citations,
                 refused,
-                retrieval_confidence
+                retrieval_confidence,
+                status,
+                refusal_type,
+                retrieved_doc_ids,
+                retrieved_count,
+                top_distance,
+                retrieval_threshold
             )
             VALUES (
                 :user_id,
@@ -226,7 +268,13 @@ def log_education_result(
                 :answer,
                 CAST(:citations AS jsonb),
                 :refused,
-                :retrieval_confidence
+                :retrieval_confidence,
+                :status,
+                :refusal_type,
+                CAST(:retrieved_doc_ids AS jsonb),
+                :retrieved_count,
+                :top_distance,
+                :retrieval_threshold
             )
         """)
 
@@ -239,6 +287,12 @@ def log_education_result(
                 "citations": json.dumps(citations),
                 "refused": refused,
                 "retrieval_confidence": retrieval_confidence,
+                "status": status,
+                "refusal_type": refusal_type,
+                "retrieved_doc_ids": json.dumps(retrieved_doc_ids or []),
+                "retrieved_count": retrieved_count,
+                "top_distance": top_distance,
+                "retrieval_threshold": retrieval_threshold,
             },
         )
         db.commit()
@@ -253,21 +307,30 @@ def log_education_result(
 
 def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]:
     """
-    Education Agent 主流程：
-    1. refusal check
-    2. retrieval
-    3. grounding check
-    4. answer generation by GPT
-    5. logging
-    6. return structured output
+    Main Education Agent flow:
+    1. Refusal check
+    2. Retrieval with dynamic top-k and threshold filter
+    3. Grounding check
+    4. GPT answer generation
+    5. Logging
+    6. Structured response
     """
     question = question.strip()
 
     if not question:
         result = {
+            "status": "refuse",
             "answer": "Sorry, your question is empty.",
             "citations": [],
-            "status": "refuse"
+            "refusal_type": "empty_question",
+            "retrieval": {
+                "initial_k": RETRIEVAL_INITIAL_K,
+                "max_k": RETRIEVAL_MAX_K,
+                "used_k": 0,
+                "threshold": RETRIEVAL_DISTANCE_THRESHOLD,
+                "confidence": 0.0,
+                "top_distance": None,
+            }
         }
 
         log_education_result(
@@ -277,6 +340,12 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
             refused=True,
             retrieval_confidence=0.0,
             user_id=user_id,
+            status=result["status"],
+            refusal_type=result["refusal_type"],
+            retrieved_doc_ids=[],
+            retrieved_count=0,
+            top_distance=None,
+            retrieval_threshold=RETRIEVAL_DISTANCE_THRESHOLD,
         )
         return result
 
@@ -284,10 +353,18 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
 
     if should_refuse:
         result = {
+            "status": "refuse",
             "answer": refusal_message,
             "citations": [],
-            "status": "refuse",
-            "refusal_type": refusal_type
+            "refusal_type": refusal_type,
+            "retrieval": {
+                "initial_k": RETRIEVAL_INITIAL_K,
+                "max_k": RETRIEVAL_MAX_K,
+                "used_k": 0,
+                "threshold": RETRIEVAL_DISTANCE_THRESHOLD,
+                "confidence": 0.0,
+                "top_distance": None,
+            }
         }
 
         log_education_result(
@@ -297,20 +374,39 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
             refused=True,
             retrieval_confidence=0.0,
             user_id=user_id,
+            status=result["status"],
+            refusal_type=result["refusal_type"],
+            retrieved_doc_ids=[],
+            retrieved_count=0,
+            top_distance=None,
+            retrieval_threshold=RETRIEVAL_DISTANCE_THRESHOLD,
         )
         return result
 
-    results = retrieve_documents(question, top_k=3)
+    results = retrieve_documents(
+        question=question,
+        initial_k=RETRIEVAL_INITIAL_K,
+        max_k=RETRIEVAL_MAX_K,
+        max_distance=RETRIEVAL_DISTANCE_THRESHOLD,
+    )
 
     if is_not_grounded(results):
         result = {
+            "status": "refuse",
             "answer": (
                 "Sorry, I do not have enough information in my knowledge base "
                 "to answer this question."
             ),
             "citations": [],
-            "status": "refuse",
-            "refusal_type": "not_grounded"
+            "refusal_type": "not_grounded",
+            "retrieval": {
+                "initial_k": RETRIEVAL_INITIAL_K,
+                "max_k": RETRIEVAL_MAX_K,
+                "used_k": 0,
+                "threshold": RETRIEVAL_DISTANCE_THRESHOLD,
+                "confidence": 0.0,
+                "top_distance": None,
+            }
         }
 
         log_education_result(
@@ -320,17 +416,30 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
             refused=True,
             retrieval_confidence=0.0,
             user_id=user_id,
+            status=result["status"],
+            refusal_type=result["refusal_type"],
+            retrieved_doc_ids=[],
+            retrieved_count=0,
+            top_distance=None,
+            retrieval_threshold=RETRIEVAL_DISTANCE_THRESHOLD,
         )
         return result
 
     answer = build_answer_with_gpt(question, results)
     citations = build_citations(results)
-    confidence = compute_retrieval_confidence(results)
+    retrieval_metadata = build_retrieval_metadata(
+        results=results,
+        initial_k=RETRIEVAL_INITIAL_K,
+        max_k=RETRIEVAL_MAX_K,
+        threshold=RETRIEVAL_DISTANCE_THRESHOLD,
+    )
+    retrieved_doc_ids = extract_retrieved_doc_ids(results)
 
     result = {
+        "status": "answer",
         "answer": answer,
         "citations": citations,
-        "status": "answer"
+        "retrieval": retrieval_metadata,
     }
 
     log_education_result(
@@ -338,28 +447,14 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
         answer=answer,
         citations=citations,
         refused=False,
-        retrieval_confidence=confidence,
+        retrieval_confidence=retrieval_metadata["confidence"],
         user_id=user_id,
+        status=result["status"],
+        refusal_type=None,
+        retrieved_doc_ids=retrieved_doc_ids,
+        retrieved_count=len(results),
+        top_distance=retrieval_metadata["top_distance"],
+        retrieval_threshold=RETRIEVAL_DISTANCE_THRESHOLD,
     )
 
     return result
-
-
-if __name__ == "__main__":
-    test_questions = [
-        "How can I save money more effectively?",
-        "What is an emergency fund?",
-        "I spend all my money every month. How should I manage it better?",
-        "What stocks should I buy right now?",
-        "How do taxes work for freelancers in Singapore?"
-    ]
-
-    for q in test_questions:
-        print("\n" + "=" * 80)
-        print(f"Question: {q}")
-        response = answer_question(
-            q,
-            user_id="b230c1ef-ed77-46bd-aeca-7139f2e0c370"
-        )
-        print("Response:")
-        print(json.dumps(response, indent=2, ensure_ascii=False))
