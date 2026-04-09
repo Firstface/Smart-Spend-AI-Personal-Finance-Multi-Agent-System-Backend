@@ -77,6 +77,11 @@ async def reflect_on_classification(
     from agents.categorization.llm.classifier import _get_llm  # reuse LLM factory
 
     llm = _get_llm()
+    if llm is None:
+        logger.warning("Reflection skipped: no available LLM provider")
+        final_cat = CategoryEnum(previous_category) if previous_category in {e.value for e in CategoryEnum} else CategoryEnum.OTHER
+        return (final_cat, previous_confidence, previous_rationale, 0)
+
     # Reflector uses slightly higher temperature to explore different perspectives
     if hasattr(llm, "temperature"):
         llm.temperature = REFLECTION_TEMPERATURE

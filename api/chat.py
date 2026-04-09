@@ -24,30 +24,30 @@ logger = logging.getLogger("api.chat")
 
 # Emoji mapping for categories (keyed by DB value)
 EMOJI_MAP = {
-    "餐饮美食": "🍜",
-    "交通出行": "🚗",
-    "居住":     "🏠",
-    "购物":     "🛒",
-    "娱乐休闲": "🎭",
-    "订阅服务": "📱",
-    "医疗健康": "🏥",
-    "日用百货": "📦",
-    "教育":     "📚",
-    "其他":     "❓",
+    "Food & Dining": "🍜",
+    "Transportation": "🚗",
+    "Housing": "🏠",
+    "Shopping": "🛒",
+    "Entertainment": "🎭",
+    "Subscriptions": "📱",
+    "Healthcare": "🏥",
+    "Daily Essentials": "📦",
+    "Education": "📚",
+    "Other": "❓",
 }
 
 # English display names for categories (DB value → English label)
 CATEGORY_DISPLAY = {
-    "餐饮美食": "Food & Dining",
-    "交通出行": "Transportation",
-    "居住":     "Housing",
-    "购物":     "Shopping",
-    "娱乐休闲": "Entertainment",
-    "订阅服务": "Subscriptions",
-    "医疗健康": "Healthcare",
-    "日用百货": "Daily Essentials",
-    "教育":     "Education",
-    "其他":     "Other",
+    "Food & Dining": "Food & Dining",
+    "Transportation": "Transportation",
+    "Housing": "Housing",
+    "Shopping": "Shopping",
+    "Entertainment": "Entertainment",
+    "Subscriptions": "Subscriptions",
+    "Healthcare": "Healthcare",
+    "Daily Essentials": "Daily Essentials",
+    "Education": "Education",
+    "Other": "Other",
 }
 
 

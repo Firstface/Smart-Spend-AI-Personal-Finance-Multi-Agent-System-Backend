@@ -97,9 +97,9 @@ def get_transactions(
 
 
 # ── DELETE /api/transactions/{transaction_id} ────────────────────────────────────
-@router.delete("/transactions/{transaction_id}", status_code=204)
+@router.delete("/transactions/{transaction_id:uuid}", status_code=204)
 def delete_transaction(
-    transaction_id: str,
+    transaction_id: uuid_module.UUID,
     user_id: str = Depends(get_user_id),
     db: Session = Depends(get_db),
 ):
@@ -123,7 +123,7 @@ def delete_transaction(
 
 # ── POST /api/transactions/bulk-delete ──────────────────────────────────────────
 class BulkDeleteRequest(BaseModel):
-    ids: List[str]
+    ids: List[uuid_module.UUID]
 
 
 @router.post("/transactions/bulk-delete")
@@ -142,7 +142,7 @@ def bulk_delete_transactions(
         .filter(Transaction.id.in_(body.ids), Transaction.user_id == user_id)
         .all()
     )
-    valid_ids = [str(t.id) for t in txns]
+    valid_ids = [t.id for t in txns]
 
     if valid_ids:
         db.query(ReviewItem).filter(

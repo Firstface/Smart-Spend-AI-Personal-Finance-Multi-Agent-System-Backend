@@ -16,6 +16,7 @@ Course reference:
 - Explainability (XRAI)             — evidence field records decision source
 """
 import logging
+import re
 from typing import List, Optional
 
 from schemas.transaction import (
@@ -31,6 +32,12 @@ from agents.categorization.reflection import reflect_on_classification
 from agents.categorization.config import CONFIDENCE_THRESHOLD
 
 logger = logging.getLogger("categorization.pipeline")
+
+
+def _is_low_information_input(counterparty: str, description: str) -> bool:
+    # Very short/generic identifiers like "song" or "data" with no description
+    # should not trigger reflection over-correction.
+    return (not description.strip()) and bool(re.fullmatch(r"[A-Za-z0-9_\-]{1,12}", counterparty.strip()))
 
 
 # ── Single transaction classification ───────────────────────────────────────────
@@ -90,7 +97,7 @@ async def classify_single(
     logger.info(f"[L5 llm] '{counterparty}' → {cat.value} conf={conf:.2f}")
 
     # ── Layer 6: Self-reflection (triggered only on low confidence) ────────────
-    if conf < CONFIDENCE_THRESHOLD:
+    if conf < CONFIDENCE_THRESHOLD and not _is_low_information_input(counterparty, description):
         logger.info(
             f"[L6 reflection] Triggering self-reflection: '{counterparty}' conf={conf:.2f} < {CONFIDENCE_THRESHOLD}"
         )

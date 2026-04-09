@@ -13,16 +13,16 @@ from enum import Enum
 # Course reference: IMDA Operations — standardized taxonomy ensures fairness,
 # not based on demographic attributes.
 class CategoryEnum(str, Enum):
-    FOOD = "餐饮美食"
-    TRANSPORT = "交通出行"
-    HOUSING = "居住"
-    SHOPPING = "购物"
-    ENTERTAINMENT = "娱乐休闲"
-    HEALTH = "医疗健康"
-    EDUCATION = "教育"
-    SUBSCRIPTION = "订阅服务"
-    DAILY_NECESSITIES = "日用百货"
-    OTHER = "其他"
+    FOOD = "Food & Dining"
+    TRANSPORT = "Transportation"
+    HOUSING = "Housing"
+    SHOPPING = "Shopping"
+    ENTERTAINMENT = "Entertainment & Leisure"
+    HEALTH = "Healthcare"
+    EDUCATION = "Education"
+    SUBSCRIPTION = "Subscription Services"
+    DAILY_NECESSITIES = "Daily Necessities"
+    OTHER = "Other"
 
 
 class DirectionEnum(str, Enum):
@@ -127,12 +127,12 @@ class ReviewRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=2, max_length=100)
     email: str = Field(pattern=r"^[^@]+@[^@]+\.[^@]+$")
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=6, max_length=72)
 
 
 class LoginRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=1, max_length=72)
 
 
 class UserOut(BaseModel):

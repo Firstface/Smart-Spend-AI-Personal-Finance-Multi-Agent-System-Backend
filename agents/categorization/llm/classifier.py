@@ -16,9 +16,11 @@ Dual LLM path:
 import os
 import logging
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -30,6 +32,10 @@ from agents.categorization.config import (
 )
 
 logger = logging.getLogger("categorization.llm")
+
+# Ensure .env is loaded even if uvicorn is started from a different cwd.
+BACKEND_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(BACKEND_ROOT / ".env", override=False)
 
 
 @lru_cache(maxsize=1)
@@ -48,14 +54,16 @@ Based on the merchant name and goods description, classify the transaction into 
 
 Strict requirements:
 1. Output JSON only — no other text
-2. category must be exactly one of the category names listed above (full Chinese name)
+2. category must be exactly one of the category names listed above
 3. subcategory is optional — a more specific sub-label (e.g. "milk tea", "taxi"); use null if none
-4. rationale: one sentence explaining the classification reasoning
+4. rationale: one sentence explaining the classification reasoning, and it must be grounded in exact words from input
 5. confidence range 0.0-1.0; use below 0.6 when uncertain — do NOT inflate scores
 6. Do not infer category from amount size — base decision solely on merchant name and description
+7. If evidence from input is insufficient, return category="Other", confidence<=0.4, rationale="Insufficient evidence from input"
+8. Never fabricate items not present in input (e.g. do not invent "milk tea" if not mentioned)
 
 Output format (strict JSON):
-{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0}}}}"""),
+{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0, "evidence_terms": ["..."]}}}}"""),
     ("human", "Merchant: {{counterparty}}\nGoods description: {{description}}"),
 ])
 
@@ -69,26 +77,27 @@ def classify_transaction_tool(counterparty: str, description: str) -> dict:
 
 
 # ── LLM factory: OpenAI preferred, Groq fallback ───────────────────────────────
-def _get_llm():
+@lru_cache(maxsize=8)
+def _get_llm_from_keys(openai_key: str, groq_key: str):
     """
     Returns an available LLM instance.
     Prefers gpt-4o-mini (OpenAI); falls back to llama-3.1-8b-instant (Groq) if no key.
     """
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    groq_key = os.getenv("GROQ_API_KEY", "")
-
-    if openai_key and openai_key != "sk-xxx":
+    def _build_openai(api_key: Optional[str] = None):
         from langchain_openai import ChatOpenAI
-        logger.debug("LLM path: OpenAI gpt-4o-mini")
         http_client, http_async_client = _build_http_clients()
         return ChatOpenAI(
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
-            api_key=openai_key,
+            api_key=api_key,
             http_client=http_client,
             http_async_client=http_async_client,
         )
+
+    if openai_key and openai_key != "sk-xxx":
+        logger.debug("LLM path: OpenAI gpt-4o-mini")
+        return _build_openai(openai_key)
     elif groq_key:
         try:
             from langchain_groq import ChatGroq
@@ -100,17 +109,28 @@ def _get_llm():
                 api_key=groq_key,
             )
         except ImportError:
-            logger.warning("langchain_groq not installed, falling back to OpenAI (even with placeholder key)")
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(
-                model=LLM_MODEL,
-                temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS,
-            )
+            logger.warning("langchain_groq not installed; trying OpenAI fallback")
+            if openai_key and openai_key != "sk-xxx":
+                return _build_openai(openai_key)
+            logger.warning("No valid OpenAI key available; LLM fallback disabled")
+            return None
     else:
-        from langchain_openai import ChatOpenAI
-        logger.warning("No valid LLM key detected, using default OpenAI (may fail)")
-        return ChatOpenAI(model=LLM_MODEL, temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS)
+        logger.warning("No valid LLM key detected; LLM fallback disabled")
+        return None
+
+
+def _sanitize_key(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    # Accept keys with accidental spaces/quotes in .env
+    return raw.strip().strip('"').strip("'")
+
+
+def _get_llm():
+    """Resolve provider with runtime env values: OpenAI first, then Groq fallback."""
+    openai_key = _sanitize_key(os.getenv("OPENAI_API_KEY", ""))
+    groq_key = _sanitize_key(os.getenv("GROQ_API_KEY", ""))
+    return _get_llm_from_keys(openai_key, groq_key)
 
 
 # ── Main classification function ────────────────────────────────────────────────
@@ -127,10 +147,13 @@ async def llm_classify(
     - confidence is clamped to [0.0, 1.0]
     - On JSON parse failure, returns safe default (OTHER, conf=0.3)
     """
-    llm = _get_llm()
-    chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
-
     try:
+        other_label = CategoryEnum.OTHER.value
+        llm = _get_llm()
+        if llm is None:
+            return (CategoryEnum.OTHER, "LLM unavailable: no valid provider configured", 0.3)
+
+        chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
         result = await chain.ainvoke({
             "categories": CATEGORIES_DISPLAY,
             "counterparty": counterparty,
@@ -138,20 +161,43 @@ async def llm_classify(
         })
 
         # ── Output validation (Guardrail) ─────────────────────────────────────
-        cat_str = result.get("category", "其他")
+        cat_str = result.get("category", other_label)
         valid_cats = {e.value for e in CategoryEnum}
         if cat_str not in valid_cats:
             logger.warning(
-                f"LLM returned invalid category '{cat_str}', downgrading to '其他'."
+                f"LLM returned invalid category '{cat_str}', downgrading to '{other_label}'."
                 f" counterparty={counterparty}"
             )
-            cat_str = "其他"
+            cat_str = other_label
 
         confidence = float(result.get("confidence", 0.5))
         confidence = max(0.0, min(1.0, confidence))
 
         rationale = result.get("rationale", "LLM classification")
         subcategory = result.get("subcategory") or None
+
+        # Evidence guard: model must cite terms that actually appear in input.
+        observed_text = f"{counterparty} {description or ''}".lower()
+        evidence_terms_raw = result.get("evidence_terms", [])
+        evidence_terms = []
+        if isinstance(evidence_terms_raw, list):
+            evidence_terms = [str(t).strip().lower() for t in evidence_terms_raw if str(t).strip()]
+
+        if cat_str != other_label:
+            has_valid_evidence = False
+            if evidence_terms:
+                has_valid_evidence = any(term in observed_text for term in evidence_terms)
+            else:
+                has_valid_evidence = counterparty.lower() in rationale.lower() or (description or "").lower() in rationale.lower()
+
+            if not has_valid_evidence:
+                logger.warning(
+                    f"LLM evidence guard triggered, downgrade to OTHER. counterparty={counterparty} rationale={rationale}"
+                )
+                cat_str = other_label
+                confidence = min(confidence, 0.35)
+                rationale = "Insufficient evidence from input"
+                subcategory = None
 
         logger.info(
             f"llm_classify: '{counterparty}' → {cat_str} "
