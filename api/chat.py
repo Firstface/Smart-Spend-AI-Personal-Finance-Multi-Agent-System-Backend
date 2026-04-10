@@ -4,10 +4,10 @@ POST /api/chat — Chat entry point (includes quick expense entry).
 Flow:
   1. Determine whether the message is a quick expense entry command (contains amount pattern)
   2. Yes → parse merchant + amount, run classification pipeline, write to DB, return formatted confirmation
-  3. No  → return general reply (to be handled by Education Agent / Planning Agent later)
+  3. No  → if intent looks like personal-finance education → Education RAG agent; else general reply
 
 Response format:
-  { "reply": "...", "type": "quick_entry" | "general", "transaction": {...} }
+  { "reply": "...", "type": "quick_entry" | "education" | "general" | "error", "transaction": {...} }
 """
 import logging
 from fastapi import APIRouter, Depends
@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from database import get_db
 from agents.categorization.quick_entry import parse_quick_entry
 from agents.categorization.agent import run_single
+from agents.chat_routing import should_route_to_education
 from api.deps import get_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -111,7 +112,34 @@ async def chat(
             "transaction": cat_txn.model_dump(mode="json"),
         }
 
-    # ── Step 4: Not an expense entry command → general reply ──────────────────
+    # ── Step 4: Intent routing → Education agent or general reply ───────────────
+    if should_route_to_education(message):
+        try:
+            from agents.education.service import answer_question
+
+            edu = answer_question(question=message, user_id=user_id)
+            reply_text = edu.get("answer") or ""
+            citations = edu.get("citations") or []
+            if isinstance(citations, list) and citations:
+                titles: list[str] = []
+                seen_t: set[str] = set()
+                for c in citations:
+                    if not isinstance(c, dict):
+                        continue
+                    t = str(c.get("title") or "").strip()
+                    if t and t not in seen_t:
+                        seen_t.add(t)
+                        titles.append(t)
+                if titles:
+                    reply_text = reply_text.rstrip() + "\n\n📚 " + ", ".join(titles[:6])
+
+            return {
+                "reply": reply_text,
+                "type": "education",
+            }
+        except Exception as e:
+            logger.warning("education agent from chat failed: %s", e)
+
     general_reply = (
         f"Got your message: \"{message}\"\n\n"
         "The chat currently supports **quick expense entry**, for example:\n"
@@ -119,7 +147,8 @@ async def chat(
         "• `Grab $12.80`\n"
         "• `Netflix $15.99`\n"
         "• `Lunch Meituan $10`\n\n"
-        "Education assistant and planning assistant coming soon 🚀"
+        "Ask a **personal finance learning** question (e.g. budgeting, saving, credit) "
+        "to use the education assistant, or try quick entry above."
     )
 
     return {
