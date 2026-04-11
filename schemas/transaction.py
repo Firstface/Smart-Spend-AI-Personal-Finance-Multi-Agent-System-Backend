@@ -1,6 +1,6 @@
 """
-Pydantic 数据模型 — 所有数据流转的契约。
-这是分类Agent与其他Agent对接的接口定义。
+Pydantic data models — contracts for all data flow.
+This is the interface definition between the Categorization Agent and other agents.
 """
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
@@ -8,20 +8,21 @@ from datetime import datetime
 from enum import Enum
 
 
-# ====== 统一分类体系 ======
-# 设计依据：融合支付宝自带的15种分类，合并归纳为10个顶层类别
-# 课程对应：IMDA运营管理 — 标准化的分类体系确保公平性，不基于人口统计属性
+# ====== Unified Category System ======
+# Design rationale: Merges Alipay's 15 built-in categories into 10 top-level categories.
+# Course reference: IMDA Operations — standardized taxonomy ensures fairness,
+# not based on demographic attributes.
 class CategoryEnum(str, Enum):
-    FOOD = "餐饮美食"
-    TRANSPORT = "交通出行"
-    HOUSING = "居住"
-    SHOPPING = "购物"
-    ENTERTAINMENT = "娱乐休闲"
-    HEALTH = "医疗健康"
-    EDUCATION = "教育"
-    SUBSCRIPTION = "订阅服务"
-    DAILY_NECESSITIES = "日用百货"
-    OTHER = "其他"
+    FOOD = "Food & Dining"
+    TRANSPORT = "Transportation"
+    HOUSING = "Housing"
+    SHOPPING = "Shopping"
+    ENTERTAINMENT = "Entertainment & Leisure"
+    HEALTH = "Healthcare"
+    EDUCATION = "Education"
+    SUBSCRIPTION = "Subscription Services"
+    DAILY_NECESSITIES = "Daily Necessities"
+    OTHER = "Other"
 
 
 class DirectionEnum(str, Enum):
@@ -46,15 +47,15 @@ class ReviewStatusEnum(str, Enum):
     CORRECTED = "corrected"
 
 
-# ====== 输入模型 ======
+# ====== Input Models ======
 class TransactionRaw(BaseModel):
-    """从 CSV/Excel 解析出的原始交易记录"""
+    """Raw transaction record parsed from CSV/Excel."""
     source: str                                   # wechat | alipay | manual
     transaction_time: datetime
-    transaction_type: Optional[str] = None        # 微信：商户消费/转账等
-    counterparty: str                             # 交易对方
-    counterparty_account: Optional[str] = None    # 对方账号（支付宝有）
-    goods_description: Optional[str] = None       # 商品说明
+    transaction_type: Optional[str] = None        # WeChat: merchant purchase / transfer / etc.
+    counterparty: str                             # transaction counterparty
+    counterparty_account: Optional[str] = None    # counterparty account (Alipay only)
+    goods_description: Optional[str] = None       # goods description
     direction: DirectionEnum
     amount: float
     currency: str = "CNY"
@@ -62,20 +63,20 @@ class TransactionRaw(BaseModel):
     status: Optional[str] = None
     order_id: Optional[str] = None
     merchant_order_id: Optional[str] = None
-    original_category: Optional[str] = None       # 支付宝自带分类
+    original_category: Optional[str] = None       # Alipay built-in category
     remark: Optional[str] = None
 
     @field_validator("amount")
     @classmethod
     def amount_must_be_positive(cls, v):
         if v < 0:
-            raise ValueError("金额不能为负数")
+            raise ValueError("Amount cannot be negative")
         return round(v, 2)
 
 
-# ====== 输出模型 ======
+# ====== Output Models ======
 class CategorizedTransaction(BaseModel):
-    """分类完成的交易记录 — 写入数据库"""
+    """Categorized transaction record — written to database."""
     id: Optional[str] = None
     source: str
     transaction_time: datetime
@@ -86,11 +87,11 @@ class CategorizedTransaction(BaseModel):
     currency: str
     payment_method: Optional[str] = None
     original_category: Optional[str] = None
-    # 分类结果
+    # Classification result
     category: CategoryEnum
     subcategory: Optional[str] = None
     confidence: float = Field(ge=0.0, le=1.0)
-    evidence: str                                 # 可解释性：为什么这样分类
+    evidence: str                                 # Explainability: why this category was chosen
     decision_source: DecisionSourceEnum
     needs_review: bool = False
 
@@ -98,11 +99,11 @@ class CategorizedTransaction(BaseModel):
 
 
 class ClassificationResult(BaseModel):
-    """分类Agent对外返回的完整结果"""
+    """Complete result returned by the Categorization Agent."""
     categorized: List[CategorizedTransaction]
     review_queue: List[CategorizedTransaction]
     stats: dict
-    # stats 示例:
+    # stats example:
     # {
     #   "total": 342, "expense": 315, "income": 27,
     #   "auto_classified": 310, "needs_review": 22, "llm_fallback": 10,
@@ -111,27 +112,27 @@ class ClassificationResult(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    """用户审查请求"""
+    """User review request."""
     action: str = Field(pattern="^(confirm|correct)$")
     corrected_category: Optional[CategoryEnum] = None
 
     @model_validator(mode="after")
     def correct_needs_category(self):
         if self.action == "correct" and self.corrected_category is None:
-            raise ValueError("纠正操作必须提供新分类")
+            raise ValueError("Correction action requires a new category")
         return self
 
 
-# ====== Auth 模型 ======
+# ====== Auth Models ======
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=2, max_length=100)
     email: str = Field(pattern=r"^[^@]+@[^@]+\.[^@]+$")
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=6, max_length=72)
 
 
 class LoginRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=1, max_length=72)
 
 
 class UserOut(BaseModel):

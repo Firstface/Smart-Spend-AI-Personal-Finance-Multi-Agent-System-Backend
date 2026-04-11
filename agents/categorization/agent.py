@@ -1,16 +1,16 @@
 """
-分类 Agent 主入口。
+Categorization Agent main entry point.
 
-对外暴露两个函数：
-  run_batch(transactions, user_id, db)  — 批量分类（文件上传流程）
-  run_single(txn, user_id, db)          — 单条分类（聊天快速记账流程）
+Exposes two functions:
+  run_batch(transactions, user_id, db)  — Batch classification (file upload flow)
+  run_single(txn, user_id, db)          — Single classification (chat quick-entry flow)
 
-课程对应的完整 Agent 循环（Day2 PPT Slide 17）：
-  1. 接收输入
-  2. 工具选择（规则 / 相似度 / LLM）
-  3. 执行
-  4. 评估（自反思）
-  5. 输出 + 写入数据库
+Full Agent loop as per course (Day2 PPT Slide 17):
+  1. Receive input
+  2. Tool selection (rules / similarity / LLM)
+  3. Execute
+  4. Evaluate (self-reflection)
+  5. Output + write to database
 """
 import uuid
 import logging
@@ -18,6 +18,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from database import SessionLocal
 from schemas.transaction import (
     TransactionRaw, CategorizedTransaction,
     ClassificationResult, CategoryEnum, DirectionEnum,
@@ -31,29 +32,29 @@ from models.review_queue import ReviewItem
 logger = logging.getLogger("categorization.agent")
 
 
-# ── 批量分类入口 ────────────────────────────────────────────────────────────────
+# ── Batch classification entry point ────────────────────────────────────────────
 async def run_batch(
     transactions: List[TransactionRaw],
     user_id: str,
     db: Session,
 ) -> ClassificationResult:
     """
-    批量分类管线主函数。
-    1. 从数据库加载用户历史交易作为长期记忆
-    2. 用历史数据初始化相似度匹配器
-    3. 逐条分类（仅对支出/收入，中性直接标 OTHER）
-    4. 批量写入 transactions + review_queue 表
-    5. 返回 ClassificationResult
+    Batch classification pipeline main function.
+    1. Load user's historical transactions from DB as long-term memory
+    2. Initialize similarity matcher with historical data
+    3. Classify each transaction (neutral transactions are directly marked OTHER)
+    4. Bulk-write to transactions + review_queue tables
+    5. Return ClassificationResult
     """
-    # ── Step 1: 加载历史记忆（Selective Memory Sharing）────────────────────────
+    # ── Step 1: Load historical memory (Selective Memory Sharing) ──────────────
     history = _load_history(db, user_id)
-    logger.info(f"加载历史交易 {len(history)} 条 user_id={user_id}")
+    logger.info(f"Loaded {len(history)} historical transactions for user_id={user_id}")
 
-    # ── Step 2: 初始化相似度匹配器 ────────────────────────────────────────────
+    # ── Step 2: Initialize similarity matcher ──────────────────────────────────
     matcher = SimilarityMatcher()
     matcher.fit(history)
 
-    # ── Step 3: 逐条分类 ───────────────────────────────────────────────────────
+    # ── Step 3: Classify each transaction ──────────────────────────────────────
     results: List[CategorizedTransaction] = []
     stats_by_source: dict = {}
 
@@ -63,10 +64,10 @@ async def run_batch(
         src = cat_txn.decision_source.value if hasattr(cat_txn.decision_source, "value") else cat_txn.decision_source
         stats_by_source[src] = stats_by_source.get(src, 0) + 1
 
-    # ── Step 4: 写入数据库 ─────────────────────────────────────────────────────
+    # ── Step 4: Write to database ──────────────────────────────────────────────
     review_queue = _save_batch(db, user_id, results)
 
-    # ── Step 5: 审计日志 ───────────────────────────────────────────────────────
+    # ── Step 5: Audit log ──────────────────────────────────────────────────────
     logger.info(
         f"audit | agent=categorization action=batch_classify "
         f"user={user_id} total={len(results)} "
@@ -80,15 +81,15 @@ async def run_batch(
     )
 
 
-# ── 单条分类入口（聊天快速记账）──────────────────────────────────────────────────
+# ── Single classification entry point (chat quick-entry) ────────────────────────
 async def run_single(
     txn: TransactionRaw,
     user_id: str,
     db: Session,
 ) -> CategorizedTransaction:
     """
-    单条分类管线。
-    复用与批量相同的六层管线，写入数据库后返回结果。
+    Single transaction classification pipeline.
+    Reuses the same six-layer pipeline as batch, writes to database and returns result.
     """
     history = _load_history(db, user_id)
     matcher = SimilarityMatcher()
@@ -105,9 +106,9 @@ async def run_single(
     return cat_txn
 
 
-# ── 私有辅助函数 ────────────────────────────────────────────────────────────────
+# ── Private helper functions ────────────────────────────────────────────────────
 def _load_history(db: Session, user_id: str) -> List[CategorizedTransaction]:
-    """从数据库加载用户已确认的历史交易（needs_review=False）"""
+    """Load confirmed historical transactions from DB (needs_review=False)."""
     rows = (
         db.query(Transaction)
         .filter(
@@ -116,7 +117,7 @@ def _load_history(db: Session, user_id: str) -> List[CategorizedTransaction]:
             Transaction.category.isnot(None),
         )
         .order_by(Transaction.transaction_time.desc())
-        .limit(500)          # 最多取最近 500 条，避免向量化过慢
+        .limit(500)          # Cap at most recent 500 to avoid slow vectorization
         .all()
     )
     return [_orm_to_schema(r) for r in rows]
@@ -127,9 +128,14 @@ def _save_batch(
     user_id: str,
     results: List[CategorizedTransaction],
 ) -> List[CategorizedTransaction]:
-    """批量写入 transactions 和 review_queue，返回需审查的子集"""
+    """Bulk-write transactions and review_queue; returns the subset needing review.
+    Uses an independent session to avoid connection timeout after long LLM calls.
+    """
     review_queue = []
+    fresh_db = SessionLocal()
     try:
+        # Pass 1: insert + commit all transactions first
+        review_needed: list = []
         for cat_txn in results:
             txn_id = uuid.uuid4()
             db_txn = Transaction(
@@ -154,25 +160,35 @@ def _save_batch(
                 ),
                 needs_review=cat_txn.needs_review,
             )
-            db.add(db_txn)
+            fresh_db.add(db_txn)
             cat_txn.id = str(txn_id)
-
             if cat_txn.needs_review:
-                db.add(ReviewItem(
-                    transaction_id=txn_id,
-                    user_id=user_id,
-                    suggested_category=cat_txn.category.value,
-                    confidence=cat_txn.confidence,
-                    evidence=cat_txn.evidence,
-                    status="pending",
-                ))
-                review_queue.append(cat_txn)
+                review_needed.append((txn_id, cat_txn))
 
-        db.commit()
+        # Commit transactions first — FK constraint on review_queue requires
+        # the referenced transaction rows to already be committed
+        fresh_db.commit()
+
+        # Pass 2: insert review_queue rows in a new transaction
+        for txn_id, cat_txn in review_needed:
+            fresh_db.add(ReviewItem(
+                transaction_id=txn_id,
+                user_id=user_id,
+                suggested_category=cat_txn.category.value,
+                confidence=cat_txn.confidence,
+                evidence=cat_txn.evidence,
+                status="pending",
+            ))
+            review_queue.append(cat_txn)
+
+        if review_needed:
+            fresh_db.commit()
     except Exception as e:
-        db.rollback()
-        logger.error(f"批量写入数据库失败: {e}")
+        fresh_db.rollback()
+        logger.error(f"Batch database write failed: {e}")
         raise
+    finally:
+        fresh_db.close()
     return review_queue
 
 
@@ -181,7 +197,11 @@ def _save_single(
     user_id: str,
     cat_txn: CategorizedTransaction,
 ) -> None:
-    """写入单条交易记录"""
+    """Write a single transaction record to the database.
+
+    To avoid FK timing issues, persist the transaction first, then add review_queue
+    in a second DB step when needed.
+    """
     try:
         txn_id = uuid.uuid4()
         db_txn = Transaction(
@@ -207,27 +227,34 @@ def _save_single(
             needs_review=cat_txn.needs_review,
         )
         db.add(db_txn)
-
-        if cat_txn.needs_review:
-            db.add(ReviewItem(
-                transaction_id=txn_id,
-                user_id=user_id,
-                suggested_category=cat_txn.category.value,
-                confidence=cat_txn.confidence,
-                evidence=cat_txn.evidence,
-                status="pending",
-            ))
-
+        # Step 1: commit transaction first so FK target definitely exists.
         db.commit()
         cat_txn.id = str(txn_id)
+
+        # Step 2: write review_queue separately (if needed).
+        if cat_txn.needs_review:
+            try:
+                db.add(ReviewItem(
+                    transaction_id=txn_id,
+                    user_id=user_id,
+                    suggested_category=cat_txn.category.value,
+                    confidence=cat_txn.confidence,
+                    evidence=cat_txn.evidence,
+                    status="pending",
+                ))
+                db.commit()
+            except Exception as review_err:
+                db.rollback()
+                # Never fail quick-entry success response because review_queue write failed.
+                logger.error(f"Review queue insert failed for transaction_id={txn_id}: {review_err}")
     except Exception as e:
         db.rollback()
-        logger.error(f"单条写入数据库失败: {e}")
+        logger.error(f"Single transaction database write failed: {e}")
         raise
 
 
 def _orm_to_schema(row: Transaction) -> CategorizedTransaction:
-    """ORM 行转 Pydantic 模型"""
+    """Convert ORM row to Pydantic model."""
     return CategorizedTransaction(
         id=str(row.id),
         source=row.source,
