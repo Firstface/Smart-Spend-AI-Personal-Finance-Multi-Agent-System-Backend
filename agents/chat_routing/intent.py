@@ -14,6 +14,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from agents.education.refusal import check_refusal
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -188,6 +190,11 @@ def should_route_to_education(message: str) -> bool:
         return False
     if _smalltalk(msg):
         return False
+    # Investment / product / personalized advice: always hand to Education so
+    # check_refusal there returns a clear policy message (LLM router often labels these "other").
+    should_refuse, _, _ = check_refusal(msg)
+    if should_refuse:
+        return True
     if _keyword_education(msg):
         return True
     if not _looks_question_like(msg):
