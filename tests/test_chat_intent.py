@@ -27,6 +27,11 @@ def test_non_question_short_without_keyword():
     assert should_route_to_education("random words only") is False
 
 
+def test_investment_advice_routes_even_without_keyword_or_llm():
+    """LLM router often classifies buy-a-stock questions as non-education; refusal still needs Education."""
+    assert should_route_to_education("What stocks should I buy right now?") is True
+
+
 def test_llm_router_respects_env_zero(monkeypatch):
     monkeypatch.setenv("CHAT_EDUCATION_LLM_ROUTER", "0")
     # No keyword, question-shaped — without LLM should stay False
