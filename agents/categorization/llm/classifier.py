@@ -1,21 +1,26 @@
 """
-LLM 回退分类器（Layer 5）。
+LLM fallback classifier (Layer 5).
 
-仅在前四层规则全部未命中时调用，最小化 LLM 成本。
+Only invoked when all four preceding rule layers miss, minimizing LLM cost.
 
-课程对应：
-- Structured Output（Day2）        — JSON Schema 约束输出，防止幻觉分类
-- Tool Use Pattern（Day2）          — LangChain Tool 定义，供 Orchestrator 发现
-- LLM06 Excessive Agency 缓解（Day3）— LLM 只返回分类建议，不执行任何副作用
-- LLMSecOps 提示词版本化            — PROMPT_VERSION 追踪
+Course reference:
+- Structured Output (Day2)         — JSON Schema constrained output to prevent hallucinated categories
+- Tool Use Pattern (Day2)           — LangChain Tool definition, discoverable by Orchestrator
+- LLM06 Excessive Agency mitigation (Day3) — LLM only returns classification suggestions, no side effects
+- LLMSecOps prompt versioning       — PROMPT_VERSION for tracking
 
-双 LLM 路径：
-- 优先使用 OPENAI_API_KEY（gpt-4o-mini）
-- 无 OpenAI Key 时自动切换到 GROQ_API_KEY（llama-3.1-8b-instant）
+Dual LLM path:
+- Primary: OPENAI_API_KEY (gpt-4o-mini)
+- Fallback: GROQ_API_KEY (llama-3.1-8b-instant) when no OpenAI key
 """
 import os
 import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
+
+import httpx
+from dotenv import load_dotenv
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -28,56 +33,75 @@ from agents.categorization.config import (
 
 logger = logging.getLogger("categorization.llm")
 
-# ── 提示词模板（版本化管理）─────────────────────────────────────────────────────
+# Ensure .env is loaded even if uvicorn is started from a different cwd.
+BACKEND_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(BACKEND_ROOT / ".env", override=False)
+
+
+@lru_cache(maxsize=1)
+def _build_http_clients() -> tuple[httpx.Client, httpx.AsyncClient]:
+    # Disable environment proxy inheritance so httpx 0.28+ does not receive the
+    # removed `proxies=` argument through LangChain/OpenAI internals.
+    sync_client = httpx.Client(trust_env=False)
+    async_client = httpx.AsyncClient(trust_env=False)
+    return sync_client, async_client
+
+# ── Prompt template (versioned) ─────────────────────────────────────────────────
 CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", f"""你是一个个人支出分类助手（提示词版本 {PROMPT_VERSION}）。
-根据商家名和商品描述，将交易分类到以下类别之一：
+    ("system", f"""You are a personal expense categorization assistant (prompt version {PROMPT_VERSION}).
+Based on the merchant name and goods description, classify the transaction into one of the following categories:
 {{categories}}
 
-严格要求：
-1. 只输出 JSON，不输出任何其他文字
-2. category 必须是上述类别之一的完整中文名称
-3. subcategory 可选，用一个更细的子类别（如 "奶茶"、"打车" 等），没有则填 null
-4. rationale 用一句话解释分类依据
-5. confidence 范围 0.0-1.0；不确定时应低于 0.6，切勿虚报高分
-6. 不要根据金额大小推断分类，只根据商家名和描述内容
+Strict requirements:
+1. Output JSON only — no other text
+2. category must be exactly one of the category names listed above
+3. subcategory is optional — a more specific sub-label (e.g. "milk tea", "taxi"); use null if none
+4. rationale: one sentence explaining the classification reasoning, and it must be grounded in exact words from input
+5. confidence range 0.0-1.0; use below 0.6 when uncertain — do NOT inflate scores
+6. Do not infer category from amount size — base decision solely on merchant name and description
+7. If evidence from input is insufficient, return category="Other", confidence<=0.4, rationale="Insufficient evidence from input"
+8. Never fabricate items not present in input (e.g. do not invent "milk tea" if not mentioned)
 
-输出格式（严格 JSON）：
-{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0}}"""),
-    ("human", "商家：{counterparty}\n商品描述：{description}"),
+Output format (strict JSON):
+{{{{"category": "...", "subcategory": "...", "rationale": "...", "confidence": 0.0, "evidence_terms": ["..."]}}}}"""),
+    ("human", "Merchant: {{counterparty}}\nGoods description: {{description}}"),
 ])
 
 
-# ── LangChain Tool 定义（供 Orchestrator 发现） ────────────────────────────────
+# ── LangChain Tool definition (discoverable by Orchestrator) ────────────────────
 @tool
 def classify_transaction_tool(counterparty: str, description: str) -> dict:
-    """使用 LLM 对无法被规则匹配的交易进行分类。输入商家名和商品描述，返回分类结果。"""
-    # 实际逻辑由 llm_classify() 异步执行
+    """Use LLM to classify a transaction that couldn't be matched by rules. Input merchant name and goods description, returns classification result."""
+    # Actual logic executed asynchronously via llm_classify()
     pass
 
 
-# ── LLM 工厂：优先 OpenAI，回退 Groq ──────────────────────────────────────────
-def _get_llm():
+# ── LLM factory: OpenAI preferred, Groq fallback ───────────────────────────────
+@lru_cache(maxsize=8)
+def _get_llm_from_keys(openai_key: str, groq_key: str):
     """
-    返回可用的 LLM 实例。
-    优先 gpt-4o-mini（OpenAI），无 Key 时回退到 llama-3.1-8b-instant（Groq）。
+    Returns an available LLM instance.
+    Prefers gpt-4o-mini (OpenAI); falls back to llama-3.1-8b-instant (Groq) if no key.
     """
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    groq_key = os.getenv("GROQ_API_KEY", "")
-
-    if openai_key and openai_key != "sk-xxx":
+    def _build_openai(api_key: Optional[str] = None):
         from langchain_openai import ChatOpenAI
-        logger.debug("LLM 路径: OpenAI gpt-4o-mini")
+        http_client, http_async_client = _build_http_clients()
         return ChatOpenAI(
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
-            api_key=openai_key,
+            api_key=api_key,
+            http_client=http_client,
+            http_async_client=http_async_client,
         )
+
+    if openai_key and openai_key != "sk-xxx":
+        logger.debug("LLM path: OpenAI gpt-4o-mini")
+        return _build_openai(openai_key)
     elif groq_key:
         try:
             from langchain_groq import ChatGroq
-            logger.debug("LLM 路径: Groq llama-3.1-8b-instant")
+            logger.debug("LLM path: Groq llama-3.1-8b-instant")
             return ChatGroq(
                 model="llama-3.1-8b-instant",
                 temperature=LLM_TEMPERATURE,
@@ -85,71 +109,108 @@ def _get_llm():
                 api_key=groq_key,
             )
         except ImportError:
-            logger.warning("langchain_groq 未安装，回退到 OpenAI（即使 key 为占位符）")
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(
-                model=LLM_MODEL,
-                temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS,
-            )
+            logger.warning("langchain_groq not installed; trying OpenAI fallback")
+            if openai_key and openai_key != "sk-xxx":
+                return _build_openai(openai_key)
+            logger.warning("No valid OpenAI key available; LLM fallback disabled")
+            return None
     else:
-        from langchain_openai import ChatOpenAI
-        logger.warning("未检测到有效 LLM Key，使用默认 OpenAI（可能失败）")
-        return ChatOpenAI(model=LLM_MODEL, temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS)
+        logger.warning("No valid LLM key detected; LLM fallback disabled")
+        return None
 
 
-# ── 主分类函数 ─────────────────────────────────────────────────────────────────
+def _sanitize_key(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    # Accept keys with accidental spaces/quotes in .env
+    return raw.strip().strip('"').strip("'")
+
+
+def _get_llm():
+    """Resolve provider with runtime env values: OpenAI first, then Groq fallback."""
+    openai_key = _sanitize_key(os.getenv("OPENAI_API_KEY", ""))
+    groq_key = _sanitize_key(os.getenv("GROQ_API_KEY", ""))
+    return _get_llm_from_keys(openai_key, groq_key)
+
+
+# ── Main classification function ────────────────────────────────────────────────
 async def llm_classify(
     counterparty: str,
     description: Optional[str],
 ) -> tuple[CategoryEnum, str, float]:
     """
-    受限 LLM 分类器。
-    返回 (CategoryEnum, rationale字符串, confidence浮点数)。
+    Constrained LLM classifier.
+    Returns (CategoryEnum, rationale string, confidence float).
 
-    输出保护：
-    - category 必须在 CategoryEnum 合法值内，否则降级为 OTHER
-    - confidence 强制夹值到 [0.0, 1.0]
-    - JSON 解析失败时返回安全默认值（OTHER, conf=0.3）
+    Output guardrails:
+    - category must be a valid CategoryEnum value; otherwise downgrades to OTHER
+    - confidence is clamped to [0.0, 1.0]
+    - On JSON parse failure, returns safe default (OTHER, conf=0.3)
     """
-    llm = _get_llm()
-    chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
-
     try:
+        other_label = CategoryEnum.OTHER.value
+        llm = _get_llm()
+        if llm is None:
+            return (CategoryEnum.OTHER, "LLM unavailable: no valid provider configured", 0.3)
+
+        chain = CLASSIFY_PROMPT | llm | JsonOutputParser()
         result = await chain.ainvoke({
             "categories": CATEGORIES_DISPLAY,
             "counterparty": counterparty,
-            "description": description or "无描述",
+            "description": description or "No description",
         })
 
-        # ── 输出验证（Guardrail）──────────────────────────────────────────────
-        cat_str = result.get("category", "其他")
+        # ── Output validation (Guardrail) ─────────────────────────────────────
+        cat_str = result.get("category", other_label)
         valid_cats = {e.value for e in CategoryEnum}
         if cat_str not in valid_cats:
             logger.warning(
-                f"LLM 输出非法分类 '{cat_str}'，降级为 '其他'。"
+                f"LLM returned invalid category '{cat_str}', downgrading to '{other_label}'."
                 f" counterparty={counterparty}"
             )
-            cat_str = "其他"
+            cat_str = other_label
 
         confidence = float(result.get("confidence", 0.5))
         confidence = max(0.0, min(1.0, confidence))
 
-        rationale = result.get("rationale", "LLM分类")
+        rationale = result.get("rationale", "LLM classification")
         subcategory = result.get("subcategory") or None
+
+        # Evidence guard: model must cite terms that actually appear in input.
+        observed_text = f"{counterparty} {description or ''}".lower()
+        evidence_terms_raw = result.get("evidence_terms", [])
+        evidence_terms = []
+        if isinstance(evidence_terms_raw, list):
+            evidence_terms = [str(t).strip().lower() for t in evidence_terms_raw if str(t).strip()]
+
+        if cat_str != other_label:
+            has_valid_evidence = False
+            if evidence_terms:
+                has_valid_evidence = any(term in observed_text for term in evidence_terms)
+            else:
+                has_valid_evidence = counterparty.lower() in rationale.lower() or (description or "").lower() in rationale.lower()
+
+            if not has_valid_evidence:
+                logger.warning(
+                    f"LLM evidence guard triggered, downgrade to OTHER. counterparty={counterparty} rationale={rationale}"
+                )
+                cat_str = other_label
+                confidence = min(confidence, 0.35)
+                rationale = "Insufficient evidence from input"
+                subcategory = None
 
         logger.info(
             f"llm_classify: '{counterparty}' → {cat_str} "
             f"conf={confidence:.2f} prompt_ver={PROMPT_VERSION}"
         )
 
-        # 将 subcategory 附加到 rationale，pipeline 层可提取
+        # Append subcategory to rationale; pipeline layer can extract it
         if subcategory:
             rationale = f"[{subcategory}] {rationale}"
 
         return (CategoryEnum(cat_str), rationale, confidence)
 
     except Exception as e:
-        logger.error(f"LLM 分类失败: {counterparty} — {e}")
-        # 安全回退：OTHER + 低置信度，确保进入审查队列
-        return (CategoryEnum.OTHER, f"LLM调用失败: {str(e)[:80]}", 0.3)
+        logger.error(f"LLM classification failed: {counterparty} — {e}")
+        # Safe fallback: OTHER + low confidence to ensure review queue entry
+        return (CategoryEnum.OTHER, f"LLM call failed: {str(e)[:80]}", 0.3)

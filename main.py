@@ -1,12 +1,12 @@
 """
-Smart Spend AI — 分类Agent后端主入口。
-FastAPI 应用，挂载所有路由，配置 CORS 允许前端访问。
+Smart Spend AI — Categorization Agent backend entry point.
+FastAPI application: mounts all routers and configures CORS for frontend access.
 """
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 配置结构化日志
+# Configure structured logging
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -15,10 +15,10 @@ logging.basicConfig(
 app = FastAPI(
     title="Smart Spend AI — Categorization Agent",
     version="1.0.0",
-    description="个人财务分类Agent后端：多层规则引擎 + LLM回退 + 自反思循环",
+    description="Personal finance categorization agent backend: multi-layer rule engine + LLM fallback + self-reflection loop",
 )
 
-# CORS 配置：允许前端 localhost:3000 / 5173 / 3001 访问
+# CORS: allow frontend access from localhost:3000 / 5173 / 3001
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -44,7 +44,6 @@ from api.upload import router as upload_router
 from api.transactions import router as transactions_router
 from api.review import router as review_router
 from api.chat import router as chat_router
-from api.education import router as education_router
 from api.insights import router as insights_router
 
 app.include_router(auth_router)
@@ -52,5 +51,14 @@ app.include_router(upload_router)
 app.include_router(transactions_router)
 app.include_router(review_router)
 app.include_router(chat_router)
+
+# Education router (optional — guarded for version compatibility)
+try:
+    from api.education import router as education_router
+    app.include_router(education_router)
+except Exception as _e:
+    import logging as _l
+    _l.getLogger(__name__).warning(f"Education router skipped: {_e}")
+
 app.include_router(education_router)
 app.include_router(insights_router)

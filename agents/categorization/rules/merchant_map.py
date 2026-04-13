@@ -1,9 +1,4 @@
-"""
-商家映射字典（Layer 1）— confidence = 1.0。
 
-课程对应：确定性规则优先于LLM —— 反模式 "Don't rush to use agentic AI for everything"。
-精确命中商家关键词，直接返回分类，零LLM成本。
-"""
 from typing import Optional
 from schemas.transaction import CategoryEnum
 
@@ -199,14 +194,10 @@ MERCHANT_MAP: dict[str, CategoryEnum] = {
 
 
 def match_merchant(counterparty: str) -> Optional[tuple[CategoryEnum, float, str]]:
-    """
-    精确商家映射匹配。
-    返回 (类别, 置信度=1.0, 证据字符串) 或 None。
-    """
     if not counterparty:
         return None
     normalized = counterparty.lower().strip()
     for keyword, category in MERCHANT_MAP.items():
         if keyword in normalized:
-            return (category, 1.0, f"商家映射命中: '{keyword}' → {category.value}")
+            return (category, 1.0, f"Merchant mapping matched: '{keyword}' → {category.value}")
     return None
