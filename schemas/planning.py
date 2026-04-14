@@ -12,6 +12,7 @@ class BudgetPlanCreate(BaseModel):
     category_limits: Dict[str, float]
     evidence: Optional[str] = None
     checklist: Optional[Dict[str, Any]] = None
+    version: int = 1
 
     model_config = ConfigDict(
         from_attributes=True,

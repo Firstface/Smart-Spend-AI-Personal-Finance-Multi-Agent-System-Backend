@@ -49,3 +49,20 @@ async def get_user_plans(
     
     plans = query.all()
     return plans
+
+@router.post("/refine", response_model=List[BudgetPlanCreate])
+async def refine_plans(
+    user_id: str, 
+    month: str, 
+    feedback: str, 
+    db: Session = Depends(get_db)
+):
+    plans = planning_service.refine_budget_plans(db, user_id, month, feedback)
+    
+    if not plans:
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to refine budget plans. Please check Agent logs."
+        )
+    
+    return [BudgetPlanCreate.model_validate(p) for p in plans]

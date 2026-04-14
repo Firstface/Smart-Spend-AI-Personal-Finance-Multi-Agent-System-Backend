@@ -9,6 +9,7 @@ from schemas.planning import BudgetPlanCreate
 from typing import List, Dict, Any
 from decimal import Decimal
 import json
+from sqlalchemy import func
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -19,7 +20,16 @@ class PlanningService:
         # Ensure OPENAI_API_KEY is set in your .env file.
         self.llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
         # We expect a list of plans (Conservative, Balanced, Aggressive)
-        self.parser = JsonOutputParser()
+        self.parser = JsonOutputParser(pydantic_object=BudgetPlanCreate)
+
+    def _get_latest_version(self, db:Session, user_id: str, month: str ) -> int:
+        # 获取当前用户在该月份的最新版本号
+        max_version = db.query(func.max(BudgetPlan.version)).filter(
+            BudgetPlan.user_id == user_id,
+            BudgetPlan.plan_month == month
+        ).scalar()
+        return max_version if max_version is not None else 0
+
 
     def generate_budget_plans(self, db: Session, user_id: str, month: str) -> List[dict]:
         """
@@ -27,7 +37,7 @@ class PlanningService:
         """
         # 1. Fetch Insights (Placeholder: In production, retrieve data from Song Mingzheng's 'insights_reports' table)
         # Example logic: last_report = db.query(InsightReport).filter_by(user_id=user_id).first()
-        # 需要从数据库获取数据，大概需要对获取到的数据进行整理，要争对uid进行获取最新的报告
+        # 需要从数据库获取数据，大概需要对获取到的数据进行整理，要针对uid进行获取最新的报告
         # 需要和分类的类名对齐
         context_data = (    # 测试数据
             "Last month total expenditure: 3,000 SGD. "
@@ -49,8 +59,14 @@ class PlanningService:
             3. Currency: All values must be in SGD.
             4. Categories: Use standardized categories: 'Dining', 'Housing', 'Transport', 'Entertainment', 'Others'.
             5. Evidence: For each scenario, provide a brief English explanation of why the limits were set.
-            6. Output Format: Each scenario must strictly include 'total_budget' (number), 'savings_target' (number), and 'category_limits' (a dictionary of categories).
-            {format_instructions}
+            6. Output Format: Each scenario MUST be a JSON object containing:
+       - 'scenario': (conservative | balanced | aggressive)
+       - 'total_budget': (number)
+       - 'savings_target': (number)
+       - 'category_limits': (dict)
+       - 'evidence': (string, mandatory reasoning why these limits fit the scenario)
+       
+    {format_instructions}
         """)
 
         # 3. Execution Chain
@@ -74,7 +90,51 @@ class PlanningService:
             logger.error(f"Failed to generate budget plans: {str(e)}")
             return []
         
-    def _validate_and_save(self, db: Session, user_id: str, month: str, raw_plans: Any) -> List[BudgetPlan]: 
+    def refine_budget_plans(self, db: Session, user_id: str, month: str, user_feedback: str) -> List[BudgetPlan]:
+        # 1. 获取最新版本的旧计划作为上下文
+        latest_v = self._get_latest_version(db, user_id, month)
+        logger.info(f"Latest plan version for user {user_id} in month {month} is {latest_v}")
+        if latest_v == 0:
+            # 如果根本没有旧计划，则退化为普通生成逻辑
+            return self.generate_budget_plans(db, user_id, month)
+
+        old_plans = db.query(BudgetPlan).filter_by(user_id=user_id, plan_month=month, version=latest_v).all()
+        
+        # 将旧计划格式化为字符串，传给 LLM 
+        old_plans_context = "\n".join([
+            f"Scenario {p.scenario}: Total {p.total_budget}, Limits: {p.category_limits}" 
+            for p in old_plans
+        ])
+
+        # 2. 构建“追问”提示词
+        refine_prompt = ChatPromptTemplate.from_template("""
+           You are a Financial Expert. The user wants to update their budget.
+        
+            [Previous Plans]: {old_plans_context}
+            [User Feedback]: "{feedback}"
+        
+            Requirements:
+            1. Create 3 new scenarios: 'conservative', 'balanced', 'aggressive'.
+            2. MANDATORY: The 'evidence' field for each scenario MUST explain exactly how you adjusted 
+                the limits based on the feedback: "{feedback}". Do not use generic templates.
+            3. Keep values in SGD.
+        
+        {format_instructions}
+        """)
+
+        # 3. 调用 LLM 并保存（版本号 + 1）
+        chain = refine_prompt | self.llm | self.parser
+        new_raw_plans = chain.invoke({
+            "version": latest_v,
+            "old_plans_context": old_plans_context,
+            "feedback": user_feedback,
+            "format_instructions": self.parser.get_format_instructions()
+        })
+
+        # 在保存时，传入 new_version = latest_v + 1
+        return self._validate_and_save(db, user_id, month, new_raw_plans, version=latest_v + 1)
+        
+    def _validate_and_save(self, db: Session, user_id: str, month: str, raw_plans: Any, version: int = 1) -> List[BudgetPlan]: 
         db_objects = []
         plans_to_process = []
         
@@ -102,6 +162,9 @@ class PlanningService:
             try:
                 # 1. 提取或计算 total_budget
                 # 如果 LLM 没给 total_budget，我们就把所有数字加起来作为总预算
+                if not plan_dict.get("evidence"):
+                    scenario = plan_dict.get("scenario", "standard")
+                    plan_dict["evidence"] = f"Budget plan generated based on {scenario} financial strategy."
                 if "total_budget" not in plan_dict:
                     all_numbers = [v for v in plan_dict.values() if isinstance(v, (int, float, Decimal))]
                     plan_dict["total_budget"] = sum(all_numbers)
@@ -118,6 +181,7 @@ class PlanningService:
                 # 注入元数据
                 plan_dict["user_id"] = str(user_id)
                 plan_dict["plan_month"] = month
+                plan_dict["version"] = version
 
                 if "scenario" not in plan_dict:
                     plan_dict["scenario"] = "balanced"
