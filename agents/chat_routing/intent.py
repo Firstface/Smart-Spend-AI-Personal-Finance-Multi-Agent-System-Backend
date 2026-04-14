@@ -95,6 +95,47 @@ _QUESTIONISH = re.compile(
 )
 _QUESTIONISH_ZH = re.compile(r"^(什么|怎么|如何|为啥|为什么|是否|能不能|请问|请教|解释|介绍|讲讲)")
 
+# Obvious follow-up / insights requests based on a user's own spending history.
+INSIGHTS_PHRASES_EN: tuple[str, ...] = (
+    "spending summary",
+    "summarize my spending",
+    "summarise my spending",
+    "analyze my spending",
+    "analyse my spending",
+    "my spending trend",
+    "expense trend",
+    "spending trend",
+    "unusual spending",
+    "unusual expense",
+    "anomaly spending",
+    "subscription summary",
+    "recurring charges",
+    "monthly spending",
+    "monthly expense",
+    "my expenses this month",
+)
+
+INSIGHTS_PHRASES_ZH: tuple[str, ...] = (
+    "分析最近支出",
+    "分析我的支出",
+    "总结最近支出",
+    "总结我的支出",
+    "最近花了多少",
+    "这个月花了多少",
+    "本月支出",
+    "本月消费",
+    "消费趋势",
+    "支出趋势",
+    "异常支出",
+    "异常消费",
+    "订阅汇总",
+    "自动扣费",
+    "消费分析",
+    "开销分析",
+    "财务总结",
+    "支出总结",
+)
+
 
 def _normalize_en(text: str) -> str:
     return " ".join(text.lower().split())
@@ -132,6 +173,36 @@ def _looks_question_like(message: str) -> bool:
     if _QUESTIONISH_ZH.match(s):
         return True
     return False
+
+
+def should_route_to_insights(message: str) -> bool:
+    """
+    True → hand off to Follow-up / Insights agent after quick expense entry fails.
+    """
+    raw = message.strip()
+    if not raw:
+        return False
+    if _smalltalk(raw):
+        return False
+
+    low = _normalize_en(raw)
+    if any(p in low for p in INSIGHTS_PHRASES_EN):
+        return True
+    if any(p in raw for p in INSIGHTS_PHRASES_ZH):
+        return True
+
+    # A light heuristic for "my spending / expenses" questions that ask for
+    # summary, trends, anomalies, or subscription review.
+    has_personal_scope = any(
+        phrase in low
+        for phrase in ("my spending", "my expense", "my expenses", "this month", "recent spending")
+    ) or any(phrase in raw for phrase in ("我的支出", "我的消费", "最近支出", "最近消费", "这个月"))
+    has_analysis_intent = any(
+        phrase in low
+        for phrase in ("summary", "summarize", "summarise", "analyze", "analyse", "trend", "unusual", "subscription")
+    ) or any(phrase in raw for phrase in ("总结", "分析", "趋势", "异常", "订阅", "汇总"))
+
+    return has_personal_scope and has_analysis_intent
 
 
 def _llm_education_intent(message: str) -> bool | None:
