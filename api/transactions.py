@@ -1,21 +1,27 @@
 """
-GET /api/transactions — 分页查询已分类交易。
+GET    /api/transactions              — Paginated query of classified transactions.
+DELETE /api/transactions/{id}         — Delete a single transaction.
+POST   /api/transactions/bulk-delete  — Delete multiple transactions by ID list.
 
-Query 参数：
-  page     int   默认 1
-  size     int   默认 20，最大 100
+Query parameters (GET):
+  page     int   default 1
+  size     int   default 20, max 100
   filter   str   all | review | reviewed
-  search   str   商家名模糊搜索
-  category str   按类别过滤（如 "餐饮美食"）
+  search   str   fuzzy search by merchant name
+  category str   filter by category (e.g. "餐饮美食")
 """
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+import uuid as uuid_module
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
 from models.transaction import Transaction
+from models.review_queue import ReviewItem
 from schemas.transaction import CategorizedTransaction, DirectionEnum
 from api.deps import get_user_id
 
@@ -23,6 +29,7 @@ router = APIRouter(prefix="/api", tags=["transactions"])
 logger = logging.getLogger("api.transactions")
 
 
+# ── GET /api/transactions ────────────────────────────────────────────────────────
 @router.get("/transactions")
 def get_transactions(
     page: int = Query(default=1, ge=1),
@@ -34,19 +41,19 @@ def get_transactions(
     db: Session = Depends(get_db),
 ):
     """
-    分页返回已分类交易，支持过滤、搜索和类别筛选。
-    同时返回全量统计（不受分页影响）。
+    Return classified transactions with pagination, supporting filter, search, and category options.
+    Also returns aggregate statistics (unaffected by pagination).
     """
-    # ── 构建查询 ───────────────────────────────────────────────────────────────
+    # ── Build query ────────────────────────────────────────────────────────────
     q = db.query(Transaction).filter(Transaction.user_id == user_id)
 
-    # 过滤模式
+    # Filter mode
     if filter == "review":
         q = q.filter(Transaction.needs_review == True)
     elif filter == "reviewed":
         q = q.filter(Transaction.needs_review == False)
 
-    # 商家名模糊搜索
+    # Fuzzy merchant name search
     if search:
         q = q.filter(
             or_(
@@ -55,14 +62,14 @@ def get_transactions(
             )
         )
 
-    # 类别过滤
+    # Category filter
     if category:
         q = q.filter(Transaction.category == category)
 
-    # 总数
+    # Total count
     total = q.count()
 
-    # 排序 + 分页
+    # Sort + paginate
     items_orm = (
         q.order_by(Transaction.transaction_time.desc())
         .offset((page - 1) * size)
@@ -72,7 +79,7 @@ def get_transactions(
 
     items = [_orm_to_schema(r) for r in items_orm]
 
-    # ── 全量统计（不受过滤影响，基于用户所有数据）────────────────────────────
+    # ── Aggregate stats (based on all user data, unaffected by filters) ────────
     stats = _build_stats(db, user_id)
 
     logger.info(
@@ -89,7 +96,68 @@ def get_transactions(
     }
 
 
-# ── 私有辅助 ───────────────────────────────────────────────────────────────────
+# ── DELETE /api/transactions/{transaction_id} ────────────────────────────────────
+@router.delete("/transactions/{transaction_id:uuid}", status_code=204)
+def delete_transaction(
+    transaction_id: uuid_module.UUID,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """Delete a single transaction (and its review_queue entry if present)."""
+    txn = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id, Transaction.user_id == user_id)
+        .first()
+    )
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found or access denied")
+
+    # Delete review_queue entry first (FK constraint)
+    db.query(ReviewItem).filter(ReviewItem.transaction_id == transaction_id).delete(synchronize_session=False)
+    db.delete(txn)
+    db.commit()
+
+    logger.info(f"delete_transaction | user={user_id} txn={transaction_id}")
+    return Response(status_code=204)
+
+
+# ── POST /api/transactions/bulk-delete ──────────────────────────────────────────
+class BulkDeleteRequest(BaseModel):
+    ids: List[uuid_module.UUID]
+
+
+@router.post("/transactions/bulk-delete")
+def bulk_delete_transactions(
+    body: BulkDeleteRequest,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db),
+):
+    """Delete multiple transactions by ID list. Only deletes rows owned by the current user."""
+    if not body.ids:
+        return {"deleted": 0}
+
+    # Verify ownership and collect valid IDs
+    txns = (
+        db.query(Transaction)
+        .filter(Transaction.id.in_(body.ids), Transaction.user_id == user_id)
+        .all()
+    )
+    valid_ids = [t.id for t in txns]
+
+    if valid_ids:
+        db.query(ReviewItem).filter(
+            ReviewItem.transaction_id.in_(valid_ids)
+        ).delete(synchronize_session=False)
+        db.query(Transaction).filter(
+            Transaction.id.in_(valid_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    logger.info(f"bulk_delete | user={user_id} requested={len(body.ids)} deleted={len(valid_ids)}")
+    return {"deleted": len(valid_ids)}
+
+
+# ── Private helpers ─────────────────────────────────────────────────────────────
 def _orm_to_schema(row: Transaction) -> CategorizedTransaction:
     return CategorizedTransaction(
         id=str(row.id),
@@ -111,7 +179,7 @@ def _orm_to_schema(row: Transaction) -> CategorizedTransaction:
 
 
 def _build_stats(db: Session, user_id: str) -> dict:
-    """计算用户全部交易的汇总统计"""
+    """Compute aggregate statistics for all of the user's transactions."""
     all_rows = (
         db.query(Transaction)
         .filter(Transaction.user_id == user_id)

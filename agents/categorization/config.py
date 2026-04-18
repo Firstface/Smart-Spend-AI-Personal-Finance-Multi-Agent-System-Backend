@@ -1,27 +1,27 @@
 """
-分类Agent配置常量。
-集中管理阈值、LLM参数、提示词版本，方便调优。
+Categorization Agent configuration constants.
+Centralized management of thresholds, LLM parameters, and prompt versions for easy tuning.
 """
 from schemas.transaction import CategoryEnum
 
-# 分类置信度阈值 — 低于此值进入审查队列
+# Classification confidence threshold — below this value, transaction enters review queue
 CONFIDENCE_THRESHOLD = 0.70
 
-# 分类展示文本（传给LLM的提示词）
+# Category display text (passed to LLM in prompts)
 CATEGORIES_DISPLAY = "、".join([e.value for e in CategoryEnum])
 
-# 提示词版本（LLMSecOps — 版本化追踪）
+# Prompt version (LLMSecOps — versioned tracking)
 PROMPT_VERSION = "v1.2"
 
-# LLM配置
+# LLM configuration
 LLM_MODEL = "gpt-4o-mini"
 LLM_MAX_TOKENS = 200
 LLM_TEMPERATURE = 0
 
-# 反思配置
+# Reflection configuration
 REFLECTION_MAX_ROUNDS = 2
 REFLECTION_TEMPERATURE = 0.1
 
-# 相似度匹配配置
+# Similarity matching configuration
 SIMILARITY_THRESHOLD = 0.6
 SIMILARITY_MAX_CONFIDENCE = 0.82

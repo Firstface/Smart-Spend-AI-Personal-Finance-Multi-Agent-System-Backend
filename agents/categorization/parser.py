@@ -1,14 +1,14 @@
 """
-文件解析器：微信支付Excel + 支付宝CSV。
+File parsers: WeChat Pay Excel + Alipay CSV.
 
-微信账单结构：
-  前17行为说明头，第18行为列头，第19行起为数据。
-  列：交易时间|交易类型|交易对方|商品|收/支|金额(元)|支付方式|当前状态|交易单号|商户单号|备注
+WeChat bill structure:
+  First 17 rows are header notes, row 18 is column headers, data starts at row 19.
+  Columns: transaction_time | type | counterparty | goods | in/out | amount(CNY) | payment | status | order_id | merchant_order_id | remark
 
-支付宝账单结构：
-  前若干行为说明头，找到以"交易时间,"开头的行作为列头，之后为数据。
-  编码：GBK。
-  列：交易时间,交易分类,交易对方,对方账号,商品说明,收/支,金额,收/付款方式,交易状态,交易订单号,商家订单号,备注
+Alipay bill structure:
+  First several rows are header notes; find the row starting with "交易时间," as column header.
+  Encoding: GBK.
+  Columns: 交易时间 | 交易分类 | 交易对方 | 对方账号 | 商品说明 | 收/支 | 金额 | 收/付款方式 | 交易状态 | 交易订单号 | 商家订单号 | 备注
 """
 import openpyxl
 import csv
@@ -22,7 +22,7 @@ from schemas.transaction import TransactionRaw, DirectionEnum
 logger = logging.getLogger("categorization.parser")
 
 
-# ── 微信支付 Excel ──────────────────────────────────────────────────────────────
+# ── WeChat Pay Excel ────────────────────────────────────────────────────────────
 def parse_wechat_excel(content: bytes) -> List[TransactionRaw]:
     wb = openpyxl.load_workbook(io.BytesIO(content))
     ws = wb.active
@@ -41,26 +41,26 @@ def parse_wechat_excel(content: bytes) -> List[TransactionRaw]:
         direction_raw = str(row[4] or "").strip()
         direction = direction_map.get(direction_raw, DirectionEnum.NEUTRAL)
 
-        # 退款类交易标记为 neutral
+        # Refund transactions are marked as neutral
         if "退款" in txn_type:
             direction = DirectionEnum.NEUTRAL
 
-        # 解析金额：去掉可能存在的 ¥ 符号
+        # Parse amount: strip possible ¥ symbol
         raw_amount = str(row[5] or "0").replace("¥", "").replace(",", "").strip()
         try:
             amount = abs(float(raw_amount))
         except ValueError:
-            logger.warning(f"微信账单金额解析失败: {row[5]}，跳过该行")
+            logger.warning(f"WeChat bill amount parse failed: {row[5]}, skipping row")
             continue
 
-        # 解析时间
+        # Parse datetime
         if isinstance(row[0], datetime):
             txn_time = row[0]
         else:
             try:
                 txn_time = datetime.strptime(str(row[0]).strip(), "%Y-%m-%d %H:%M:%S")
             except ValueError:
-                logger.warning(f"微信账单时间解析失败: {row[0]}，跳过该行")
+                logger.warning(f"WeChat bill datetime parse failed: {row[0]}, skipping row")
                 continue
 
         txn = TransactionRaw(
@@ -76,17 +76,40 @@ def parse_wechat_excel(content: bytes) -> List[TransactionRaw]:
             order_id=str(row[8] or "").strip() or None,
             merchant_order_id=str(row[9] or "").strip() or None,
             remark=str(row[10] or "").strip() if row[10] and str(row[10]).strip() != "/" else None,
-            original_category=None,  # 微信无自带分类
+            original_category=None,  # WeChat has no built-in category
         )
         transactions.append(txn)
 
-    logger.info(f"微信账单解析完成，共 {len(transactions)} 条记录")
+    logger.info(f"WeChat bill parsed: {len(transactions)} records")
     return transactions
 
 
-# ── 支付宝 CSV ─────────────────────────────────────────────────────────────────
+# ── Datetime helper ─────────────────────────────────────────────────────────────
+_DATETIME_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",   # 2025-12-17 12:17:00  (standard Alipay)
+    "%Y-%m-%d %H:%M",      # 2025-12-17 12:17
+    "%d/%m/%Y %H:%M:%S",   # 17/12/2025 12:17:00  (some exports)
+    "%d/%m/%Y %H:%M",      # 17/12/2025 12:17
+    "%m/%d/%Y %H:%M:%S",   # 12/17/2025 12:17:00
+    "%m/%d/%Y %H:%M",      # 12/17/2025 12:17
+    "%Y/%m/%d %H:%M:%S",   # 2025/12/17 12:17:00
+    "%Y/%m/%d %H:%M",      # 2025/12/17 12:17
+]
+
+def _parse_datetime(value: str) -> datetime | None:
+    """Try multiple datetime formats; return None if all fail."""
+    value = value.strip()
+    for fmt in _DATETIME_FORMATS:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+# ── Alipay CSV ──────────────────────────────────────────────────────────────────
 def parse_alipay_csv(content: bytes) -> List[TransactionRaw]:
-    # 支付宝账单编码为 GBK
+    # Alipay bills are GBK encoded
     try:
         text = content.decode("gbk")
     except UnicodeDecodeError:
@@ -94,16 +117,16 @@ def parse_alipay_csv(content: bytes) -> List[TransactionRaw]:
 
     lines = text.strip().split("\n")
 
-    # 找到列头行（以"交易时间,"开头）
+    # Find the column header row (starts with "交易时间,")
     header_idx = None
     for i, line in enumerate(lines):
         if line.startswith("交易时间,") or line.startswith("交易时间，"):
             header_idx = i
             break
     if header_idx is None:
-        raise ValueError("无法识别支付宝CSV格式：找不到列头行（应以'交易时间,'开头）")
+        raise ValueError("Cannot identify Alipay CSV format: column header row not found (should start with '交易时间,')")
 
-    # 过滤末尾汇总行（支付宝CSV末尾有"---"分隔的汇总）
+    # Filter trailing summary rows (Alipay CSV ends with "---" separated totals)
     data_lines = []
     for line in lines[header_idx:]:
         if line.startswith("---") or line.strip() == "":
@@ -124,10 +147,9 @@ def parse_alipay_csv(content: bytes) -> List[TransactionRaw]:
         if not time_str:
             continue
 
-        try:
-            txn_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            logger.warning(f"支付宝账单时间解析失败: {time_str}，跳过该行")
+        txn_time = _parse_datetime(time_str)
+        if txn_time is None:
+            logger.warning(f"Alipay bill datetime parse failed: {time_str}, skipping row")
             continue
 
         direction_str = row.get("收/支", "").strip()
@@ -141,7 +163,7 @@ def parse_alipay_csv(content: bytes) -> List[TransactionRaw]:
         try:
             amount = abs(float(raw_amount))
         except ValueError:
-            logger.warning(f"支付宝账单金额解析失败: {row.get('金额')}，跳过该行")
+            logger.warning(f"Alipay bill amount parse failed: {row.get('金额')}, skipping row")
             continue
 
         txn = TransactionRaw(
@@ -162,17 +184,107 @@ def parse_alipay_csv(content: bytes) -> List[TransactionRaw]:
         )
         transactions.append(txn)
 
-    logger.info(f"支付宝账单解析完成，共 {len(transactions)} 条记录")
+    logger.info(f"Alipay bill parsed: {len(transactions)} records")
     return transactions
 
 
-# ── 统一入口 ───────────────────────────────────────────────────────────────────
+# ── Alipay Excel ────────────────────────────────────────────────────────────────
+def parse_alipay_excel(content: bytes) -> List[TransactionRaw]:
+    """
+    Parse Alipay bill exported as .xlsx.
+    Column layout mirrors the CSV version; find the header row by looking for '交易时间'.
+    """
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    ws = wb.active
+
+    # Find the header row
+    header_row_idx = None
+    headers = []
+    for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if row and str(row[0] or "").strip() == "交易时间":
+            header_row_idx = i
+            headers = [str(c or "").strip() for c in row]
+            break
+
+    if header_row_idx is None:
+        raise ValueError("Cannot identify Alipay Excel format: header row with '交易时间' not found")
+
+    direction_map = {
+        "支出": DirectionEnum.EXPENSE,
+        "收入": DirectionEnum.INCOME,
+        "不计收支": DirectionEnum.NEUTRAL,
+    }
+
+    transactions = []
+    for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+        if not row or row[0] is None or str(row[0]).startswith("---"):
+            break
+        data = {headers[i]: str(v or "").strip() for i, v in enumerate(row) if i < len(headers)}
+
+        time_str = data.get("交易时间", "")
+        if not time_str:
+            continue
+        txn_time = _parse_datetime(time_str)
+        if txn_time is None:
+            logger.warning(f"Alipay Excel datetime parse failed: {time_str}, skipping row")
+            continue
+
+        direction_str = data.get("收/支", "").strip()
+        direction = direction_map.get(direction_str, DirectionEnum.NEUTRAL)
+
+        category_raw = data.get("交易分类", "").strip()
+        if category_raw == "退款":
+            direction = DirectionEnum.NEUTRAL
+
+        raw_amount = data.get("金额", "0").replace(",", "")
+        try:
+            amount = abs(float(raw_amount))
+        except ValueError:
+            logger.warning(f"Alipay Excel amount parse failed: {data.get('金额')}, skipping row")
+            continue
+
+        txn = TransactionRaw(
+            source="alipay",
+            transaction_time=txn_time,
+            transaction_type=category_raw or None,
+            counterparty=data.get("交易对方", ""),
+            counterparty_account=data.get("对方账号", "") or None,
+            goods_description=data.get("商品说明", "") or None,
+            direction=direction,
+            amount=amount,
+            payment_method=data.get("收/付款方式", "") or None,
+            status=data.get("交易状态", "") or None,
+            order_id=data.get("交易订单号", "") or None,
+            merchant_order_id=data.get("商家订单号", "") or None,
+            original_category=category_raw if category_raw and category_raw != "退款" else None,
+            remark=data.get("备注", "") or None,
+        )
+        transactions.append(txn)
+
+    logger.info(f"Alipay Excel parsed: {len(transactions)} records")
+    return transactions
+
+
+# ── Unified entry point ─────────────────────────────────────────────────────────
 def parse_file(filename: str, content: bytes) -> List[TransactionRaw]:
-    """根据文件扩展名分发到对应解析器"""
+    """
+    Dispatch to the appropriate parser based on file extension and content.
+    - .csv               → Alipay CSV parser
+    - .xlsx/.xls         → Try WeChat parser first; if zero records, try Alipay Excel parser
+    """
     name_lower = filename.lower()
-    if name_lower.endswith(".xlsx") or name_lower.endswith(".xls"):
-        return parse_wechat_excel(content)
-    elif name_lower.endswith(".csv"):
+    if name_lower.endswith(".csv"):
         return parse_alipay_csv(content)
+    elif name_lower.endswith(".xlsx") or name_lower.endswith(".xls"):
+        # Try WeChat first (standard .xlsx format)
+        try:
+            result = parse_wechat_excel(content)
+            if result:
+                return result
+        except Exception:
+            pass
+        # Fallback: try Alipay Excel format
+        logger.info(f"WeChat parse yielded 0 records for '{filename}', retrying as Alipay Excel")
+        return parse_alipay_excel(content)
     else:
-        raise ValueError(f"不支持的文件格式: {filename}，请上传 .xlsx 或 .csv 文件")
+        raise ValueError(f"Unsupported file format: {filename}. Please upload .xlsx (WeChat/Alipay) or .csv (Alipay).")
