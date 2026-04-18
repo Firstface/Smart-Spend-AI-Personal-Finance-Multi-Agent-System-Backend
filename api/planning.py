@@ -34,21 +34,49 @@ async def generate_monthly_plans(
     
     return [BudgetPlanCreate.model_validate(plan) for plan in plans]
 
+# @router.get("/my-plans/{user_id}", response_model=List[BudgetPlanCreate])
+# async def get_user_plans(
+#     user_id: str, 
+#     month: str = None, 
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Retrieve existing budget plans for a specific user.
+#     """
+#     query = db.query(BudgetPlan).filter(BudgetPlan.user_id == user_id)
+#     if month:
+#         query = query.filter(BudgetPlan.plan_month == month)
+    
+#     plans = query.all()
+#     return plans
+
 @router.get("/my-plans/{user_id}", response_model=List[BudgetPlanCreate])
 async def get_user_plans(
     user_id: str, 
     month: str = None, 
+    latest_only: bool = True, # 默认为 True
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieve existing budget plans for a specific user.
-    """
     query = db.query(BudgetPlan).filter(BudgetPlan.user_id == user_id)
     if month:
         query = query.filter(BudgetPlan.plan_month == month)
-    
-    plans = query.all()
-    return plans
+
+    if latest_only:
+        # 获取最大版本号
+        max_v_subquery = db.query(func.max(BudgetPlan.version)).filter(
+            BudgetPlan.user_id == user_id
+        )
+        if month:
+            max_v_subquery = max_v_subquery.filter(BudgetPlan.plan_month == month)
+        
+        max_v = max_v_subquery.scalar()
+        
+        if max_v is not None:
+            query = query.filter(BudgetPlan.version == max_v)
+        else:
+            return []
+
+    return query.all()
 
 @router.post("/refine", response_model=List[BudgetPlanCreate])
 async def refine_plans(
