@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import os
 import logging
 from sqlalchemy.orm import Session
@@ -6,10 +7,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from models.budget_plans import BudgetPlan
 from schemas.planning import BudgetPlanCreate
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from decimal import Decimal
 import json
 from sqlalchemy import func
+from agents.insights.service import generate_monthly_summary
+import calendar
+from models.transaction import Transaction
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -22,13 +26,63 @@ class PlanningService:
         # We expect a list of plans (Conservative, Balanced, Aggressive)
         self.parser = JsonOutputParser(pydantic_object=BudgetPlanCreate)
 
+    def _get_previous_month_range(self, month_str: str) -> Tuple[datetime, datetime]:
+        """
+        根据当前规划月份，获取上个月的起始和结束日期。
+        例如：输入 '2026-05'，返回 (2026-04-01, 2026-04-30 23:59:59)
+        """
+        current_month = datetime.strptime(month_str, "%Y-%m")
+        # 计算上个月的第一天
+        first_day_of_current = current_month.replace(day=1)
+        last_day_of_prev = first_day_of_current - timedelta(days=1)
+        start_date = last_day_of_prev.replace(day=1, hour=0, minute=0, second=0)
+        
+        # 计算上个月的最后一天
+        _, last_day_num = calendar.monthrange(start_date.year, start_date.month)
+        end_date = start_date.replace(day=last_day_num, hour=23, minute=59, second=59)
+        
+        return start_date, end_date
+    
+    def _format_summary_context(self, summary: Any) -> str:
+        """
+        将 MonthlySummary 对象转换为 LLM 提示词中的字符串 context
+        """
+        if not summary or summary.total_expense == 0:
+            return "No spending data available for the previous month."
+
+        top_cats = ", ".join([
+            f"{c.category}: {c.amount} SGD ({c.percentage:.1f}%)" 
+            for c in summary.top_categories
+        ])
+        
+        context = (
+            f"Last month total expenditure: {summary.total_expense:.2f} SGD. "
+            f"Top categories: {top_cats}. "
+            f"Average monthly spending: {summary.average_monthly_spending:.2f} SGD."
+        )
+        return context
+
     def _get_latest_version(self, db:Session, user_id: str, month: str ) -> int:
         # 获取当前用户在该月份的最新版本号
         max_version = db.query(func.max(BudgetPlan.version)).filter(
             BudgetPlan.user_id == user_id,
-            BudgetPlan.plan_month == month
-        ).scalar()
-        return max_version if max_version is not None else 0
+        )
+        if month:
+            max_version = max_version.filter(BudgetPlan.plan_month == month)
+        max_v = max_version.scalar()
+        return max_v if max_v is not None else 0
+
+    def get_plans(self, db: Session, user_id: str, month: str, latest_only: bool = True) -> List[BudgetPlan]:
+        query = db.query(BudgetPlan).filter(BudgetPlan.user_id == user_id)
+        if month:
+            query = query.filter(BudgetPlan.plan_month == month)
+        if latest_only:
+            latest_v = self._get_latest_version(db, user_id, month)
+            if latest_v > 0:
+                query = query.filter(BudgetPlan.version == latest_v)
+            else:
+                return []
+        return query.all()
 
 
     def generate_budget_plans(self, db: Session, user_id: str, month: str) -> List[dict]:
@@ -39,11 +93,34 @@ class PlanningService:
         # Example logic: last_report = db.query(InsightReport).filter_by(user_id=user_id).first()
         # 需要从数据库获取数据，大概需要对获取到的数据进行整理，要针对uid进行获取最新的报告
         # 需要和分类的类名对齐
-        context_data = (    # 测试数据
-            "Last month total expenditure: 3,000 SGD. "
-            "Breakdown: Dining 1,200 SGD (Overspent), Housing 1,000 SGD (Fixed), "
-            "Transport 300 SGD, Entertainment 500 SGD."
-        )
+        existing_plans = self.get_plans(db, user_id, month, latest_only=True)
+        
+        if existing_plans:
+            logger.info(f"Plans for {month} already exist for user {user_id}. Skipping generation.")
+            return existing_plans
+
+        # 2. 获取上个月的时间范围
+        start_date, end_date = self._get_previous_month_range(month)
+        logger.info(f"Fetching insights from {start_date} to {end_date} for planning.")
+
+        # context_data = (    # 测试数据
+        #     "Last month total expenditure: 3,000 SGD. "
+        #     "Breakdown: Dining 1,200 SGD (Overspent), Housing 1,000 SGD (Fixed), "
+        #     "Transport 300 SGD, Entertainment 500 SGD."
+        # )
+        # 3. 从数据库获取上个月的所有交易记录
+        transactions = db.query(Transaction).filter(
+            Transaction.user_id == user_id,
+            Transaction.transaction_time >= start_date,
+            Transaction.transaction_time <= end_date
+        ).all()
+
+        # 4. 调用 Insights 服务生成摘要
+        summary = generate_monthly_summary(transactions, start_date, end_date)
+        
+        # 5. 将摘要转化为 LLM 可读的 Context
+        context_data = self._format_summary_context(summary)
+        logger.info(f"Generated context for LLM: {context_data}")
 
         # 2. Construct the Prompt with strict English constraints
         prompt = ChatPromptTemplate.from_template("""
@@ -56,7 +133,7 @@ class PlanningService:
             1. Principle: Strictly follow the 50/30/20 rule (50% Needs, 30% Wants, 20% Savings).
             2. Scenarios: Provide exactly three scenarios: 'conservative' (max savings), 
                'balanced' (standard 50/30/20), and 'aggressive' (higher allowance for 'wants' while maintaining core savings).
-            3. Currency: All values must be in SGD.
+            3. Currency: All values must be in CNY.
             4. Categories: Use standardized categories: 'Dining', 'Housing', 'Transport', 'Entertainment', 'Others'.
             5. Evidence: For each scenario, provide a brief English explanation of why the limits were set.
             6. Output Format: Each scenario MUST be a JSON object containing:

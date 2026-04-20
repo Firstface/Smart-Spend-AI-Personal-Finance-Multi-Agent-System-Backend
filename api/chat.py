@@ -17,7 +17,8 @@ from pydantic import BaseModel
 from database import get_db
 from agents.categorization.quick_entry import parse_quick_entry
 from agents.categorization.agent import run_single
-from agents.chat_routing import should_route_to_education, should_route_to_insights
+from agents.chat_routing import should_route_to_education, should_route_to_insights, should_route_to_planning
+from agents.planning.agent import PlanningAgent
 from api.deps import get_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -155,7 +156,25 @@ async def chat(
         except Exception as e:
             logger.warning("insights agent from chat failed: %s", e)
 
+    if should_route_to_planning(message):
+        logger.info(f"Routing to PlanningAgent based on message: '{message}'")
+        try:
+            # 直接调用你的 Agent 处理函数
+            # 它会返回解析并处理后的 Markdown 字符串
+            planning_agent = PlanningAgent()
+            reply_text = await planning_agent.handle(message, user_id, db)
+            
+            return {
+                "reply": reply_text,
+                "type": "planning",  # 给前端一个明确的类型，方便做样式区分
+            }
+        except Exception as e:
+            logger.error(f"planning agent from chat failed: {e}")
+            return {"reply": f"Sorry, I had trouble processing your planning request: {str(e)[:80]}", "type": "error"}
+            # 如果失败了，可以选择报错或者继续往下走让 general 兜底
+
     if should_route_to_education(message):
+        logger.info(f"Routing to Education agent based on message: '{message}'")
         try:
             from agents.education.service import answer_question
 
@@ -181,6 +200,8 @@ async def chat(
             }
         except Exception as e:
             logger.warning("education agent from chat failed: %s", e)
+
+    
 
     general_reply = (
         f"Got your message: \"{message}\"\n\n"
