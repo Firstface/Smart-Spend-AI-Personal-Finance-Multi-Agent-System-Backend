@@ -33,6 +33,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security Middleware - Protects against SQL injection, XSS, prompt injection, etc.
+from api.security_middleware import SecurityMiddleware
+app.add_middleware(SecurityMiddleware)
+
 
 @app.get("/health")
 def health_check():

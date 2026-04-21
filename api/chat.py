@@ -19,9 +19,13 @@ from agents.categorization.quick_entry import parse_quick_entry
 from agents.categorization.agent import run_single
 from agents.chat_routing import should_route_to_education, should_route_to_insights
 from api.deps import get_user_id
+from agents.security.agent import SecurityAgent
 
 router = APIRouter(prefix="/api", tags=["chat"])
 logger = logging.getLogger("api.chat")
+
+# Security agent instance for this module
+_security_agent = SecurityAgent()
 
 # Emoji mapping for categories (keyed by DB value)
 EMOJI_MAP = {
@@ -94,10 +98,33 @@ async def chat(
     if not message:
         return {"reply": "Please enter a message", "type": "error"}
 
-    logger.info(f"chat | user={user_id} message='{message[:60]}'")
+    # Security check on input message
+    security_result = _security_agent.check_input(
+        message,
+        context={
+            "user_id": user_id,
+            "path": "/api/chat"
+        }
+    )
+    
+    if not security_result.is_safe:
+        logger.warning(
+            f"Security threat blocked in chat | user={user_id} "
+            f"threat_type={security_result.threat_type}"
+        )
+        return {
+            "reply": security_result.message or "请求包含不被允许的内容",
+            "type": "security_blocked",
+            "threat_type": security_result.threat_type
+        }
+    
+    # Use sanitized message if available
+    safe_message = security_result.sanitized_text or message
+
+    logger.info(f"chat | user={user_id} message='{safe_message[:60]}'")
 
     # ── Step 1: Attempt quick expense entry parsing ────────────────────────────
-    entry_result = await parse_quick_entry(message)
+    entry_result = await parse_quick_entry(safe_message)
 
     if entry_result.success and entry_result.transaction:
         # ── Step 2: Run full classification pipeline and write to database ─────
@@ -141,26 +168,34 @@ async def chat(
         }
 
     # ── Step 4: Intent routing → Insights / Education agent or general reply ───
-    if should_route_to_insights(message):
+    if should_route_to_insights(safe_message):
         try:
             from agents.insights.agent import generate_insights
 
             insights = await generate_insights(user_id=user_id, db=db, use_llm=False)
             insights_payload = insights.model_dump(mode="json")
+            reply = _build_insights_reply(insights_payload, safe_message)
             return {
-                "reply": _build_insights_reply(insights_payload, message),
+                "reply": reply,
                 "type": "insights",
                 "insights": insights_payload,
             }
         except Exception as e:
             logger.warning("insights agent from chat failed: %s", e)
 
-    if should_route_to_education(message):
+    if should_route_to_education(safe_message):
         try:
             from agents.education.service import answer_question
 
-            edu = answer_question(question=message, user_id=user_id)
+            edu = answer_question(question=safe_message, user_id=user_id)
             reply_text = edu.get("answer") or ""
+            
+            # Security check on LLM response
+            output_security = _security_agent.check_output(
+                reply_text,
+                context={"user_id": user_id}
+            )
+            reply_text = output_security.sanitized_text or reply_text
             citations = edu.get("citations") or []
             if isinstance(citations, list) and citations:
                 titles: list[str] = []
@@ -183,7 +218,7 @@ async def chat(
             logger.warning("education agent from chat failed: %s", e)
 
     general_reply = (
-        f"Got your message: \"{message}\"\n\n"
+        f"Got your message: \"{safe_message}\"\n\n"
         "The chat currently supports **quick expense entry**, for example:\n"
         "• `Starbucks $5.50`\n"
         "• `Grab $12.80`\n"

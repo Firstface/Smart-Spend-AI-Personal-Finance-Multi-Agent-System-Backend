@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from .retrieval import retrieve_documents
 from .refusal import check_refusal
+from agents.security.agent import SecurityAgent
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -32,6 +33,9 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Security agent for checking questions and LLM responses
+_security_agent = SecurityAgent()
 
 RETRIEVAL_INITIAL_K = int(os.getenv("RETRIEVAL_INITIAL_K", "8"))
 RETRIEVAL_MAX_K = int(os.getenv("RETRIEVAL_MAX_K", "3"))
@@ -308,14 +312,46 @@ def log_education_result(
 def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]:
     """
     Main Education Agent flow:
-    1. Refusal check
-    2. Retrieval with dynamic top-k and threshold filter
-    3. Grounding check
-    4. GPT answer generation
-    5. Logging
-    6. Structured response
+    1. Security check on input
+    2. Refusal check
+    3. Retrieval with dynamic top-k and threshold filter
+    4. Grounding check
+    5. GPT answer generation
+    6. Security check on output
+    7. Logging
+    8. Structured response
     """
     question = question.strip()
+    
+    # Security check on question
+    if question:
+        security_result = _security_agent.check_input(
+            question,
+            context={"user_id": user_id or "unknown", "agent": "education"}
+        )
+        
+        if not security_result.is_safe:
+            logger.warning(
+                f"Security threat in education question | user={user_id} "
+                f"threat_type={security_result.threat_type}"
+            )
+            return {
+                "status": "refuse",
+                "answer": "您的问题包含不被允许的内容，请修改后重试。",
+                "citations": [],
+                "refusal_type": "security_block",
+                "retrieval": {
+                    "initial_k": RETRIEVAL_INITIAL_K,
+                    "max_k": RETRIEVAL_MAX_K,
+                    "used_k": 0,
+                    "threshold": RETRIEVAL_DISTANCE_THRESHOLD,
+                    "confidence": 0.0,
+                    "top_distance": None,
+                }
+            }
+        
+        # Use sanitized question
+        question = security_result.sanitized_text or question
 
     if not question:
         result = {
@@ -426,6 +462,14 @@ def answer_question(question: str, user_id: str | None = None) -> dict[str, Any]
         return result
 
     answer = build_answer_with_gpt(question, results)
+    
+    # Security check on LLM response
+    output_security = _security_agent.check_output(
+        answer,
+        context={"user_id": user_id or "unknown", "agent": "education"}
+    )
+    answer = output_security.sanitized_text or answer
+    
     citations = build_citations(results)
     retrieval_metadata = build_retrieval_metadata(
         results=results,

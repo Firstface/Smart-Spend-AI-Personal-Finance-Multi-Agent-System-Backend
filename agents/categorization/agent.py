@@ -28,8 +28,12 @@ from agents.categorization.pipeline import classify_single
 from agents.categorization.similarity.matcher import SimilarityMatcher
 from models.transaction import Transaction
 from models.review_queue import ReviewItem
+from agents.security.agent import SecurityAgent
 
 logger = logging.getLogger("categorization.agent")
+
+# Security agent for checking counterparty and description fields
+_security_agent = SecurityAgent()
 
 
 # ── Batch classification entry point ────────────────────────────────────────────
@@ -91,6 +95,32 @@ async def run_single(
     Single transaction classification pipeline.
     Reuses the same six-layer pipeline as batch, writes to database and returns result.
     """
+    # Security check on transaction fields
+    if txn.counterparty:
+        security_result = _security_agent.check_input(
+            txn.counterparty,
+            context={"user_id": user_id, "field": "counterparty"}
+        )
+        if not security_result.is_safe:
+            logger.warning(
+                f"Security threat in transaction counterparty | user={user_id} "
+                f"threat_type={security_result.threat_type}"
+            )
+            # Sanitize the counterparty
+            txn.counterparty = security_result.sanitized_text or txn.counterparty
+    
+    if txn.goods_description:
+        security_result = _security_agent.check_input(
+            txn.goods_description,
+            context={"user_id": user_id, "field": "goods_description"}
+        )
+        if not security_result.is_safe:
+            logger.warning(
+                f"Security threat in transaction description | user={user_id} "
+                f"threat_type={security_result.threat_type}"
+            )
+            txn.goods_description = security_result.sanitized_text or txn.goods_description
+    
     history = _load_history(db, user_id)
     matcher = SimilarityMatcher()
     matcher.fit(history)

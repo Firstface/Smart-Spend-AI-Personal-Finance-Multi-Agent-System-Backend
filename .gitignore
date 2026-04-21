@@ -11,8 +11,9 @@ ENV/
 
 # Environment variables
 .env
-.env.*
 !.env.example
+security.env
+!security.env.example
 
 # Test / type-check / tooling caches
 .pytest_cache/
