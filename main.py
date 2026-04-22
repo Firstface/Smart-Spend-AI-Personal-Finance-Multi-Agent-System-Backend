@@ -64,5 +64,15 @@ except Exception as _e:
     import logging as _l
     _l.getLogger(__name__).warning(f"Education router skipped: {_e}")
 
-app.include_router(education_router)
 app.include_router(insights_router)
+
+# ── Server Entry Point ────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )

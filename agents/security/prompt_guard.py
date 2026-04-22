@@ -106,10 +106,19 @@ class PromptGuard:
     def _might_contain_injection(self, text: str) -> bool:
         """Quick heuristic to check if text might contain prompt injection."""
         injection_keywords = [
+            # 英文关键词
             'ignore', 'disregard', 'forget', 'bypass', 'jailbreak',
             'system prompt', 'instructions', 'rules', 'restrictions',
-            'role', 'pretend', 'act as', 'you are',
-            '忽略', '绕过', '越狱', '指令', '规则', '扮演'
+            'role', 'pretend', 'act as', 'you are', 'you were',
+            'reveal', 'show me', 'tell me', 'what is your',
+            'api key', 'secret', 'token', 'password', 'credentials',
+            'hypothetically', 'imagine', 'suppose', 'assume',
+            'developer mode', 'dan mode', 'debug mode',
+            'output', 'print', 'display', 'leak', 'expose',
+            # 中文关键词
+            '忽略', '绕过', '越狱', '指令', '规则', '扮演',
+            '系统提示', 'api密钥', '密码', '令牌', '凭证',
+            '假设', '想象', '透露', '显示', '告诉',
         ]
         text_lower = text.lower()
         return any(keyword in text_lower for keyword in injection_keywords)

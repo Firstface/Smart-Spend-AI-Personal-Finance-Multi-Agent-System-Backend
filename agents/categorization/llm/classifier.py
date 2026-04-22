@@ -76,12 +76,12 @@ def classify_transaction_tool(counterparty: str, description: str) -> dict:
     pass
 
 
-# ── LLM factory: OpenAI preferred, Groq fallback ───────────────────────────────
+# ── LLM factory: Ollama preferred, then OpenAI, then Groq fallback ───────────────
 @lru_cache(maxsize=8)
-def _get_llm_from_keys(openai_key: str, groq_key: str):
+def _get_llm_from_keys(ollama_base: str, ollama_model: str, openai_key: str, groq_key: str):
     """
     Returns an available LLM instance.
-    Prefers gpt-4o-mini (OpenAI); falls back to llama-3.1-8b-instant (Groq) if no key.
+    Prefers Ollama (local); falls back to OpenAI, then Groq.
     """
     def _build_openai(api_key: Optional[str] = None):
         from langchain_openai import ChatOpenAI
@@ -95,9 +95,32 @@ def _get_llm_from_keys(openai_key: str, groq_key: str):
             http_async_client=http_async_client,
         )
 
+    # Priority 1: Ollama (local LLM)
+    if ollama_base and ollama_model:
+        try:
+            from langchain_openai import ChatOpenAI
+            http_client, http_async_client = _build_http_clients()
+            logger.debug(f"LLM path: Ollama {ollama_model} at {ollama_base}")
+            return ChatOpenAI(
+                model=ollama_model,
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS,
+                openai_api_key="ollama",  # Ollama doesn't require a real key
+                openai_api_base=f"{ollama_base}/v1",
+                http_client=http_client,
+                http_async_client=http_async_client,
+            )
+        except ImportError:
+            logger.warning("langchain_openai not installed; skipping Ollama")
+        except Exception as e:
+            logger.warning(f"Ollama initialization failed: {e}")
+
+    # Priority 2: OpenAI
     if openai_key and openai_key != "sk-xxx":
         logger.debug("LLM path: OpenAI gpt-4o-mini")
         return _build_openai(openai_key)
+    
+    # Priority 3: Groq
     elif groq_key:
         try:
             from langchain_groq import ChatGroq
@@ -115,7 +138,7 @@ def _get_llm_from_keys(openai_key: str, groq_key: str):
             logger.warning("No valid OpenAI key available; LLM fallback disabled")
             return None
     else:
-        logger.warning("No valid LLM key detected; LLM fallback disabled")
+        logger.warning("No valid LLM provider detected; LLM fallback disabled")
         return None
 
 
@@ -127,10 +150,12 @@ def _sanitize_key(raw: Optional[str]) -> str:
 
 
 def _get_llm():
-    """Resolve provider with runtime env values: OpenAI first, then Groq fallback."""
+    """Resolve provider with runtime env values: Ollama first, then OpenAI, then Groq fallback."""
+    ollama_base = os.getenv("OLLAMA_BASE_URL", "").strip()
+    ollama_model = os.getenv("OLLAMA_MODEL", "").strip()
     openai_key = _sanitize_key(os.getenv("OPENAI_API_KEY", ""))
     groq_key = _sanitize_key(os.getenv("GROQ_API_KEY", ""))
-    return _get_llm_from_keys(openai_key, groq_key)
+    return _get_llm_from_keys(ollama_base, ollama_model, openai_key, groq_key)
 
 
 # ── Main classification function ────────────────────────────────────────────────

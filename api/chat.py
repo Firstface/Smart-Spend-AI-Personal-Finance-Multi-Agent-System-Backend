@@ -160,12 +160,23 @@ async def chat(
             f"counterparty='{cat_txn.counterparty}' amount={cat_txn.amount} "
             f"category={cat_name} conf={cat_txn.confidence:.2f}"
         )
-
-        return {
+        
+        response = {
             "reply": reply,
             "type": "quick_entry",
             "transaction": cat_txn.model_dump(mode="json"),
         }
+        
+        # Log response
+        logger.info(f"\n{'='*60}")
+        logger.info(f"📤 Response Summary")
+        logger.info(f"{'='*60}")
+        logger.info(f"✅ Status: 200 OK")
+        logger.info(f"📊 Response Type: {response['type']}")
+        logger.info(f"💬 Reply: {reply}")
+        logger.info(f"{'='*60}\n")
+        
+        return response
 
     # ── Step 4: Intent routing → Insights / Education agent or general reply ───
     if should_route_to_insights(safe_message):
@@ -228,7 +239,18 @@ async def chat(
         "to use the education assistant, or try quick entry above."
     )
 
-    return {
+    response = {
         "reply": general_reply,
         "type": "general",
     }
+    
+    # Log response
+    logger.info(f"\n{'='*60}")
+    logger.info(f"📤 Response Summary")
+    logger.info(f"{'='*60}")
+    logger.info(f"✅ Status: 200 OK")
+    logger.info(f"📊 Response Type: {response['type']}")
+    logger.info(f"💬 Reply preview: {response['reply'][:100]}...")
+    logger.info(f"{'='*60}\n")
+    
+    return response

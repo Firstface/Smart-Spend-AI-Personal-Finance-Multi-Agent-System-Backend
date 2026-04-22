@@ -50,7 +50,20 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 request_body = await request.body()
                 request_body_str = request_body.decode('utf-8', errors='ignore')
                 
+                # Extract message from JSON for better logging
+                try:
+                    import json
+                    body_json = json.loads(request_body_str)
+                    message = body_json.get('message', '')
+                    if message:
+                        logger.info(f"📨 Incoming request | path={request.url.path} method={request.method}")
+                        logger.info(f"💬 Message preview: {message[:100]}...")
+                except:
+                    message = request_body_str[:100]
+                    logger.info(f"📨 Incoming request | path={request.url.path} method={request.method}")
+                
                 # Check request body for security threats
+                logger.info(f"🔍 Running security checks...")
                 security_result = self.security_agent.check_input(
                     request_body_str,
                     context={
@@ -60,15 +73,24 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     }
                 )
                 
+                # Log security check result
+                process_time = time.time() - start_time
                 if not security_result.is_safe:
-                    # Block the request
-                    process_time = time.time() - start_time
-                    logger.warning(
-                        f"Request blocked by security middleware | "
-                        f"path={request.url.path} method={request.method} "
-                        f"threat_type={security_result.threat_type} "
-                        f"time={process_time:.3f}s"
-                    )
+                    # THREAT DETECTED - Block the request
+                    logger.warning(f"\n{'='*60}")
+                    logger.warning(f"🚨 SECURITY THREAT DETECTED 🚨")
+                    logger.warning(f"{'='*60}")
+                    logger.warning(f"❌ Action: BLOCKED")
+                    logger.warning(f"📍 Path: {request.url.path}")
+                    logger.warning(f"🔧 Method: {request.method}")
+                    logger.warning(f"⚠️  Threat Type: {security_result.threat_type}")
+                    logger.warning(f"📊 Threat Level: {security_result.threat_level}")
+                    logger.warning(f"⏱️  Detection Time: {process_time:.3f}s")
+                    logger.warning(f"🔎 Detection Method: {security_result.details.get('detection_method', 'unknown') if security_result.details else 'N/A'}")
+                    logger.warning(f"💬 Message: {security_result.message}")
+                    if security_result.details and 'reason' in security_result.details:
+                        logger.warning(f"📝 LLM Reason: {security_result.details['reason'][:150]}")
+                    logger.warning(f"{'='*60}\n")
                     
                     return JSONResponse(
                         status_code=403,
@@ -78,8 +100,15 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                             "level": security_result.threat_level
                         }
                     )
+                else:
+                    # SAFE - Allow request
+                    logger.info(f"✅ Security check PASSED | time={process_time:.3f}s")
+                    logger.info(f"🟢 Action: ALLOWED - Forwarding to handler\n")
+                    
             except Exception as e:
-                logger.error(f"Security middleware request check failed: {e}")
+                logger.error(f"❌ Security middleware request check failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 # Fail secure - allow request but log error
                 pass
         
