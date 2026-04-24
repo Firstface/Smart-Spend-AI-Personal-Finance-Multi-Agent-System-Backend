@@ -15,7 +15,9 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set in .env")
 
 # kb.json
-KB_PATH = Path(__file__).resolve().parent / "kb.json"
+DEFAULT_KB_PATH = BASE_DIR / "data" / "kb.json"
+LEGACY_KB_PATH = Path(__file__).resolve().parent / "kb.json"
+KB_PATH = DEFAULT_KB_PATH if DEFAULT_KB_PATH.exists() else LEGACY_KB_PATH
 
 engine = create_engine(
     DATABASE_URL,

@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from database import get_db
 from agents.categorization.quick_entry import parse_quick_entry
-from agents.categorization.agent import run_single
 from agents.chat_routing import should_route_to_education, should_route_to_insights, should_route_to_planning
 from agents.planning.agent import PlanningAgent
 from api.deps import get_user_id
@@ -103,6 +102,9 @@ async def chat(
     if entry_result.success and entry_result.transaction:
         # ── Step 2: Run full classification pipeline and write to database ─────
         try:
+            # Lazy import avoids loading heavy LLM stack during module import
+            # when quick-entry classification is not needed (e.g., many tests).
+            from agents.categorization.agent import run_single
             cat_txn = await run_single(entry_result.transaction, user_id, db)
         except Exception as e:
             logger.error(f"quick_entry classify failed: {e}")
