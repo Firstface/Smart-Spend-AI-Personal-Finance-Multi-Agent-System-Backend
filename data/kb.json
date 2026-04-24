@@ -149,5 +149,641 @@
     "topic": "financial goals",
     "title": "Staying Consistent",
     "content": "Consistency is key to achieving goals. Regular saving supports progress. Tracking progress keeps motivation high. Small steps lead to success. Discipline ensures better outcomes."
+  },
+  {
+    "id": "Doc_25",
+    "topic": "budgeting",
+    "title": "50/30/20 Budget Rule",
+    "content": "A common budgeting method is the 50/30/20 rule. It suggests allocating 50% of income to needs, 30% to wants, and 20% to savings. This provides a simple structure for managing money. It helps balance spending and saving. It is easy for beginners to follow."
+  },
+  {
+    "id": "Doc_26",
+    "topic": "budgeting",
+    "title": "Tracking Expenses",
+    "content": "Tracking expenses helps you understand spending habits. You can use apps or spreadsheets. Recording every expense increases awareness. It helps identify unnecessary spending. This improves budgeting accuracy."
+  },
+  {
+    "id": "Doc_27",
+    "topic": "saving",
+    "title": "Pay Yourself First",
+    "content": "Paying yourself first means saving before spending. Once income is received, a portion is transferred to savings immediately. This ensures saving is prioritized. It reduces the risk of overspending. It builds strong financial discipline."
+  },
+  {
+    "id": "Doc_28",
+    "topic": "saving",
+    "title": "Automating Savings",
+    "content": "Automating savings helps maintain consistency. You can set up automatic transfers to a savings account. This removes the need for manual action. It reduces temptation to spend. Over time, savings grow steadily."
+  },
+  {
+    "id": "Doc_29",
+    "topic": "emergency fund",
+    "title": "Where to Keep Emergency Funds",
+    "content": "Emergency funds should be kept in safe and liquid accounts. Savings accounts are commonly used. The money should be easy to access when needed. Avoid risky investments for emergency funds. Safety and accessibility are the priorities."
+  },
+  {
+    "id": "Doc_30",
+    "topic": "emergency fund",
+    "title": "Building Emergency Funds Gradually",
+    "content": "You do not need to save the full emergency fund immediately. Start with small contributions. Gradually increase the amount over time. Consistency is more important than size. Even a small fund provides protection."
+  },
+  {
+    "id": "Doc_31",
+    "topic": "needs vs wants",
+    "title": "Gray Areas in Spending",
+    "content": "Some expenses may fall between needs and wants. For example, a basic phone is a need, but an expensive model may be a want. Evaluating necessity helps make better decisions. Awareness improves financial control."
+  },
+  {
+    "id": "Doc_32",
+    "topic": "debt basics",
+    "title": "Good Debt vs Bad Debt",
+    "content": "Not all debt is harmful. Good debt may support long-term goals, such as education. Bad debt usually comes from unnecessary spending. High-interest debt is risky. Understanding the difference helps better decisions."
+  },
+  {
+    "id": "Doc_33",
+    "topic": "debt basics",
+    "title": "Credit Card Risks",
+    "content": "Credit cards can lead to overspending if not managed carefully. High interest rates increase repayment costs. Paying only the minimum can trap users in debt. Responsible usage is essential. Always track spending."
+  },
+  {
+    "id": "Doc_34",
+    "topic": "debt basics",
+    "title": "Debt Repayment Strategies",
+    "content": "Common strategies include paying off high-interest debt first. Another method is paying smaller debts first for motivation. Consistency in repayment is important. Avoid adding new debt during repayment. This improves financial stability."
+  },
+  {
+    "id": "Doc_35",
+    "topic": "financial planning",
+    "title": "Importance of Financial Planning",
+    "content": "Financial planning helps manage income, expenses, and future goals. It provides a clear roadmap. Planning reduces uncertainty. It improves decision-making. Long-term stability depends on good planning."
+  },
+  {
+    "id": "Doc_36",
+    "topic": "financial planning",
+    "title": "Setting a Budget Plan",
+    "content": "A budget plan outlines expected income and expenses. It helps allocate money effectively. Reviewing the plan regularly is important. Adjustments may be needed over time. A good plan improves financial outcomes."
+  },
+  {
+    "id": "Doc_37",
+    "topic": "spending habits",
+    "title": "Delayed Gratification",
+    "content": "Delayed gratification means waiting before making purchases. This helps avoid impulsive decisions. It encourages thoughtful spending. Over time, it improves financial discipline. It supports long-term goals."
+  },
+  {
+    "id": "Doc_38",
+    "topic": "spending habits",
+    "title": "Cash vs Digital Spending",
+    "content": "Digital payments make spending easier but less noticeable. Cash spending increases awareness. Choosing the right method can influence habits. Awareness helps control expenses. Monitoring is important."
+  },
+  {
+    "id": "Doc_39",
+    "topic": "subscription management",
+    "title": "Free Trials and Hidden Costs",
+    "content": "Free trials may turn into paid subscriptions. Users often forget to cancel. This leads to unexpected charges. Always check terms and reminders. Awareness prevents unnecessary costs."
+  },
+  {
+    "id": "Doc_40",
+    "topic": "financial goals",
+    "title": "SMART Financial Goals",
+    "content": "Financial goals should be Specific, Measurable, Achievable, Relevant, and Time-bound. This framework improves clarity. It helps track progress. Clear goals increase success rates. It supports better planning."
+  },
+  {
+    "id": "Doc_41",
+    "topic": "financial goals",
+    "title": "Reviewing Financial Goals",
+    "content": "Financial goals should be reviewed regularly. Life situations may change. Adjusting goals keeps them relevant. Tracking progress maintains motivation. Flexibility improves success."
+  },
+  {
+    "id": "Doc_42",
+    "topic": "risk awareness",
+    "title": "Financial Risk Awareness",
+    "content": "Financial decisions involve risks. Understanding risks helps avoid losses. High returns often come with high risk. Awareness improves decision-making. Always evaluate before committing."
+  },
+  {
+    "id": "Doc_43",
+    "topic": "risk awareness",
+    "title": "Avoiding Financial Scams",
+    "content": "Financial scams promise quick profits. They often pressure users to act quickly. Always verify sources before investing. Avoid sharing personal information. Awareness protects your finances."
+  },
+  {
+    "id": "Doc_44",
+    "topic": "insurance basics",
+    "title": "Why Insurance Matters",
+    "content": "Insurance provides financial protection against unexpected events. It reduces financial burden during emergencies. Common types include health and life insurance. It supports financial stability. Planning includes protection."
+  },
+  {
+    "id": "Doc_45",
+    "topic": "insurance basics",
+    "title": "Basic Types of Insurance",
+    "content": "Common insurance types include health, life, and property insurance. Each covers different risks. Choosing the right type depends on needs. Understanding coverage is important. Insurance complements savings."
+  },
+  {
+    "id": "Doc_46",
+    "topic": "budgeting",
+    "title": "Fixed vs Variable Expenses",
+    "content": "Fixed expenses remain the same each month, such as rent or insurance. Variable expenses change, such as food or entertainment. Understanding the difference helps control spending. It improves budgeting accuracy. Managing both types is important."
+  },
+  {
+    "id": "Doc_47",
+    "topic": "budgeting",
+    "title": "Adjusting Your Budget",
+    "content": "Budgets should not be static. They need to be adjusted when income or expenses change. Regular reviews help keep the budget realistic. Flexibility improves long-term success. Adaptation is key."
+  },
+  {
+    "id": "Doc_48",
+    "topic": "saving",
+    "title": "Saving for Short-Term Goals",
+    "content": "Short-term savings goals include travel or purchases. These require smaller amounts over a shorter period. Planning helps achieve them faster. Consistent saving is still important. Clear goals improve motivation."
+  },
+  {
+    "id": "Doc_49",
+    "topic": "saving",
+    "title": "Saving for Long-Term Security",
+    "content": "Long-term savings support future financial security. This includes retirement or major life events. Starting early is beneficial. Time allows savings to grow. Long-term discipline is essential."
+  },
+  {
+    "id": "Doc_50",
+    "topic": "saving",
+    "title": "Separating Savings Accounts",
+    "content": "Using separate accounts for different goals helps organization. For example, one for emergencies and one for goals. This prevents accidental spending. It improves clarity. Organization supports better planning."
+  },
+  {
+    "id": "Doc_51",
+    "topic": "emergency fund",
+    "title": "Emergency Fund First Step",
+    "content": "Before investing or large spending, build a basic emergency fund. Even one month of expenses is a good start. It provides immediate protection. Gradual expansion is encouraged. This creates a financial safety net."
+  },
+  {
+    "id": "Doc_52",
+    "topic": "needs vs wants",
+    "title": "Prioritizing Essential Spending",
+    "content": "Essential spending should always come before discretionary spending. This ensures stability. Covering basic needs prevents financial stress. Prioritization improves decision-making. It supports long-term planning."
+  },
+  {
+    "id": "Doc_53",
+    "topic": "debt basics",
+    "title": "Consequences of Late Payments",
+    "content": "Late payments may result in penalties and additional interest. They can also affect credit history. Consistent repayment is important. Avoiding delays reduces financial burden. Discipline is key."
+  },
+  {
+    "id": "Doc_54",
+    "topic": "debt basics",
+    "title": "Understanding Loan Terms",
+    "content": "Loan agreements include interest rates, repayment schedules, and fees. Understanding these terms is important before borrowing. Clear knowledge prevents surprises. It supports responsible decisions. Always read carefully."
+  },
+  {
+    "id": "Doc_55",
+    "topic": "debt basics",
+    "title": "Avoiding Overborrowing",
+    "content": "Borrowing more than you can repay leads to financial stress. Always assess repayment ability first. Keep debt at manageable levels. Avoid unnecessary loans. Responsible borrowing protects finances."
+  },
+  {
+    "id": "Doc_56",
+    "topic": "financial planning",
+    "title": "Income Stability and Planning",
+    "content": "Stable income helps with consistent planning. Irregular income requires more careful budgeting. Planning based on average income can help. Flexibility is important. Stability improves confidence."
+  },
+  {
+    "id": "Doc_57",
+    "topic": "financial planning",
+    "title": "Planning for Life Events",
+    "content": "Major life events require financial preparation. Examples include education or relocation. Planning ahead reduces stress. Saving early is beneficial. Preparation supports smoother transitions."
+  },
+  {
+    "id": "Doc_58",
+    "topic": "spending habits",
+    "title": "Recognizing Emotional Spending",
+    "content": "Emotional spending occurs during stress or excitement. It often leads to unnecessary purchases. Recognizing triggers helps control behavior. Awareness improves decision-making. Managing emotions is important."
+  },
+  {
+    "id": "Doc_59",
+    "topic": "spending habits",
+    "title": "Setting Spending Limits",
+    "content": "Setting limits helps control expenses. It prevents overspending. Limits can be daily or monthly. Sticking to them builds discipline. It supports financial goals."
+  },
+  {
+    "id": "Doc_60",
+    "topic": "subscription management",
+    "title": "Annual vs Monthly Subscriptions",
+    "content": "Some subscriptions offer discounts for annual payments. However, long-term commitment may not always be suitable. Evaluate usage before choosing. Flexibility may be more important. Choose based on needs."
+  },
+  {
+    "id": "Doc_61",
+    "topic": "subscription management",
+    "title": "Tracking Renewal Dates",
+    "content": "Knowing renewal dates helps avoid unexpected charges. Setting reminders is useful. It allows timely cancellation if needed. Awareness reduces waste. Organization improves control."
+  },
+  {
+    "id": "Doc_62",
+    "topic": "financial goals",
+    "title": "Breaking Goals into Steps",
+    "content": "Large financial goals can be divided into smaller steps. This makes them easier to achieve. Progress becomes measurable. Small wins increase motivation. Structured goals improve success."
+  },
+  {
+    "id": "Doc_63",
+    "topic": "financial goals",
+    "title": "Balancing Multiple Goals",
+    "content": "It is common to have multiple financial goals. Balancing them requires prioritization. Allocate resources wisely. Avoid neglecting important goals. Balance supports stability."
+  },
+  {
+    "id": "Doc_64",
+    "topic": "risk awareness",
+    "title": "Understanding Risk and Return",
+    "content": "Higher potential returns usually come with higher risks. Low-risk options offer more stability but lower returns. Understanding this trade-off is important. It supports informed decisions. Balance is key."
+  },
+  {
+    "id": "Doc_65",
+    "topic": "risk awareness",
+    "title": "Avoiding Get-Rich-Quick Schemes",
+    "content": "Promises of quick wealth are often unrealistic. These schemes carry high risk. Careful evaluation is necessary. Avoid making rushed decisions. Long-term planning is safer."
+  },
+  {
+    "id": "Doc_66",
+    "topic": "insurance basics",
+    "title": "Insurance as Risk Protection",
+    "content": "Insurance transfers financial risk to an insurer. It provides protection against unexpected losses. It reduces uncertainty. Choosing appropriate coverage is important. Protection supports stability."
+  },
+  {
+    "id": "Doc_67",
+    "topic": "insurance basics",
+    "title": "Understanding Premiums",
+    "content": "Premiums are regular payments for insurance coverage. Higher coverage often means higher premiums. Balancing cost and protection is important. Understanding terms helps better decisions. Choose wisely."
+  },
+  {
+    "id": "Doc_68",
+    "topic": "income management",
+    "title": "Managing Irregular Income",
+    "content": "Irregular income requires careful budgeting. Save extra during high-income periods. Maintain a buffer for low-income periods. Planning improves stability. Discipline is important."
+  },
+  {
+    "id": "Doc_69",
+    "topic": "income management",
+    "title": "Diversifying Income Sources",
+    "content": "Having multiple income sources reduces financial risk. It provides stability during uncertainty. Side income can support savings. Diversification improves resilience. Planning is important."
+  },
+  {
+    "id": "Doc_70",
+    "topic": "financial discipline",
+    "title": "Building Financial Discipline",
+    "content": "Discipline is essential for long-term financial success. It involves consistent saving and controlled spending. Small habits matter. Over time, discipline leads to stability. It supports all financial goals."
+  },
+  {
+    "id": "Doc_71",
+    "topic": "financial discipline",
+    "title": "Avoiding Lifestyle Inflation",
+    "content": "Lifestyle inflation occurs when spending increases with income. It reduces savings potential. Maintaining stable spending habits is important. Avoid unnecessary upgrades. This supports long-term goals."
+  },
+  {
+    "id": "Doc_72",
+    "topic": "financial awareness",
+    "title": "Financial Awareness Importance",
+    "content": "Understanding your financial situation improves decisions. Awareness includes income, expenses, and savings. It helps identify problems early. Knowledge supports control. Awareness is the foundation."
+  },
+  {
+    "id": "Doc_73",
+    "topic": "financial awareness",
+    "title": "Regular Financial Checkups",
+    "content": "Reviewing finances regularly helps maintain control. It ensures goals are on track. Adjustments can be made early. Regular checks prevent problems. Consistency improves outcomes."
+  },
+  {
+    "id": "Doc_74",
+    "topic": "financial protection",
+    "title": "Building Financial Safety Nets",
+    "content": "A financial safety net includes savings, insurance, and emergency funds. It protects against unexpected events. Building it takes time. It provides peace of mind. Protection improves resilience."
+  },
+  {
+    "id": "Doc_75",
+    "topic": "financial protection",
+    "title": "Importance of Diversification",
+    "content": "Diversification spreads financial risk across different areas. It reduces impact of losses. Relying on one source is risky. Balance improves stability. Diversification supports long-term security."
+  },
+  {
+    "id": "Doc_46",
+    "topic": "budgeting",
+    "title": "Fixed vs Variable Expenses",
+    "content": "Fixed expenses remain the same each month, such as rent or insurance. Variable expenses change, such as food or entertainment. Understanding the difference helps control spending. It improves budgeting accuracy. Managing both types is important."
+  },
+  {
+    "id": "Doc_47",
+    "topic": "budgeting",
+    "title": "Adjusting Your Budget",
+    "content": "Budgets should not be static. They need to be adjusted when income or expenses change. Regular reviews help keep the budget realistic. Flexibility improves long-term success. Adaptation is key."
+  },
+  {
+    "id": "Doc_48",
+    "topic": "saving",
+    "title": "Saving for Short-Term Goals",
+    "content": "Short-term savings goals include travel or purchases. These require smaller amounts over a shorter period. Planning helps achieve them faster. Consistent saving is still important. Clear goals improve motivation."
+  },
+  {
+    "id": "Doc_49",
+    "topic": "saving",
+    "title": "Saving for Long-Term Security",
+    "content": "Long-term savings support future financial security. This includes retirement or major life events. Starting early is beneficial. Time allows savings to grow. Long-term discipline is essential."
+  },
+  {
+    "id": "Doc_50",
+    "topic": "saving",
+    "title": "Separating Savings Accounts",
+    "content": "Using separate accounts for different goals helps organization. For example, one for emergencies and one for goals. This prevents accidental spending. It improves clarity. Organization supports better planning."
+  },
+  {
+    "id": "Doc_51",
+    "topic": "emergency fund",
+    "title": "Emergency Fund First Step",
+    "content": "Before investing or large spending, build a basic emergency fund. Even one month of expenses is a good start. It provides immediate protection. Gradual expansion is encouraged. This creates a financial safety net."
+  },
+  {
+    "id": "Doc_52",
+    "topic": "needs vs wants",
+    "title": "Prioritizing Essential Spending",
+    "content": "Essential spending should always come before discretionary spending. This ensures stability. Covering basic needs prevents financial stress. Prioritization improves decision-making. It supports long-term planning."
+  },
+  {
+    "id": "Doc_53",
+    "topic": "debt basics",
+    "title": "Consequences of Late Payments",
+    "content": "Late payments may result in penalties and additional interest. They can also affect credit history. Consistent repayment is important. Avoiding delays reduces financial burden. Discipline is key."
+  },
+  {
+    "id": "Doc_54",
+    "topic": "debt basics",
+    "title": "Understanding Loan Terms",
+    "content": "Loan agreements include interest rates, repayment schedules, and fees. Understanding these terms is important before borrowing. Clear knowledge prevents surprises. It supports responsible decisions. Always read carefully."
+  },
+  {
+    "id": "Doc_55",
+    "topic": "debt basics",
+    "title": "Avoiding Overborrowing",
+    "content": "Borrowing more than you can repay leads to financial stress. Always assess repayment ability first. Keep debt at manageable levels. Avoid unnecessary loans. Responsible borrowing protects finances."
+  },
+  {
+    "id": "Doc_56",
+    "topic": "financial planning",
+    "title": "Income Stability and Planning",
+    "content": "Stable income helps with consistent planning. Irregular income requires more careful budgeting. Planning based on average income can help. Flexibility is important. Stability improves confidence."
+  },
+  {
+    "id": "Doc_57",
+    "topic": "financial planning",
+    "title": "Planning for Life Events",
+    "content": "Major life events require financial preparation. Examples include education or relocation. Planning ahead reduces stress. Saving early is beneficial. Preparation supports smoother transitions."
+  },
+  {
+    "id": "Doc_58",
+    "topic": "spending habits",
+    "title": "Recognizing Emotional Spending",
+    "content": "Emotional spending occurs during stress or excitement. It often leads to unnecessary purchases. Recognizing triggers helps control behavior. Awareness improves decision-making. Managing emotions is important."
+  },
+  {
+    "id": "Doc_59",
+    "topic": "spending habits",
+    "title": "Setting Spending Limits",
+    "content": "Setting limits helps control expenses. It prevents overspending. Limits can be daily or monthly. Sticking to them builds discipline. It supports financial goals."
+  },
+  {
+    "id": "Doc_60",
+    "topic": "subscription management",
+    "title": "Annual vs Monthly Subscriptions",
+    "content": "Some subscriptions offer discounts for annual payments. However, long-term commitment may not always be suitable. Evaluate usage before choosing. Flexibility may be more important. Choose based on needs."
+  },
+  {
+    "id": "Doc_61",
+    "topic": "subscription management",
+    "title": "Tracking Renewal Dates",
+    "content": "Knowing renewal dates helps avoid unexpected charges. Setting reminders is useful. It allows timely cancellation if needed. Awareness reduces waste. Organization improves control."
+  },
+  {
+    "id": "Doc_62",
+    "topic": "financial goals",
+    "title": "Breaking Goals into Steps",
+    "content": "Large financial goals can be divided into smaller steps. This makes them easier to achieve. Progress becomes measurable. Small wins increase motivation. Structured goals improve success."
+  },
+  {
+    "id": "Doc_63",
+    "topic": "financial goals",
+    "title": "Balancing Multiple Goals",
+    "content": "It is common to have multiple financial goals. Balancing them requires prioritization. Allocate resources wisely. Avoid neglecting important goals. Balance supports stability."
+  },
+  {
+    "id": "Doc_64",
+    "topic": "risk awareness",
+    "title": "Understanding Risk and Return",
+    "content": "Higher potential returns usually come with higher risks. Low-risk options offer more stability but lower returns. Understanding this trade-off is important. It supports informed decisions. Balance is key."
+  },
+  {
+    "id": "Doc_65",
+    "topic": "risk awareness",
+    "title": "Avoiding Get-Rich-Quick Schemes",
+    "content": "Promises of quick wealth are often unrealistic. These schemes carry high risk. Careful evaluation is necessary. Avoid making rushed decisions. Long-term planning is safer."
+  },
+  {
+    "id": "Doc_66",
+    "topic": "insurance basics",
+    "title": "Insurance as Risk Protection",
+    "content": "Insurance transfers financial risk to an insurer. It provides protection against unexpected losses. It reduces uncertainty. Choosing appropriate coverage is important. Protection supports stability."
+  },
+  {
+    "id": "Doc_67",
+    "topic": "insurance basics",
+    "title": "Understanding Premiums",
+    "content": "Premiums are regular payments for insurance coverage. Higher coverage often means higher premiums. Balancing cost and protection is important. Understanding terms helps better decisions. Choose wisely."
+  },
+  {
+    "id": "Doc_68",
+    "topic": "income management",
+    "title": "Managing Irregular Income",
+    "content": "Irregular income requires careful budgeting. Save extra during high-income periods. Maintain a buffer for low-income periods. Planning improves stability. Discipline is important."
+  },
+  {
+    "id": "Doc_69",
+    "topic": "income management",
+    "title": "Diversifying Income Sources",
+    "content": "Having multiple income sources reduces financial risk. It provides stability during uncertainty. Side income can support savings. Diversification improves resilience. Planning is important."
+  },
+  {
+    "id": "Doc_70",
+    "topic": "financial discipline",
+    "title": "Building Financial Discipline",
+    "content": "Discipline is essential for long-term financial success. It involves consistent saving and controlled spending. Small habits matter. Over time, discipline leads to stability. It supports all financial goals."
+  },
+  {
+    "id": "Doc_71",
+    "topic": "financial discipline",
+    "title": "Avoiding Lifestyle Inflation",
+    "content": "Lifestyle inflation occurs when spending increases with income. It reduces savings potential. Maintaining stable spending habits is important. Avoid unnecessary upgrades. This supports long-term goals."
+  },
+  {
+    "id": "Doc_72",
+    "topic": "financial awareness",
+    "title": "Financial Awareness Importance",
+    "content": "Understanding your financial situation improves decisions. Awareness includes income, expenses, and savings. It helps identify problems early. Knowledge supports control. Awareness is the foundation."
+  },
+  {
+    "id": "Doc_73",
+    "topic": "financial awareness",
+    "title": "Regular Financial Checkups",
+    "content": "Reviewing finances regularly helps maintain control. It ensures goals are on track. Adjustments can be made early. Regular checks prevent problems. Consistency improves outcomes."
+  },
+  {
+    "id": "Doc_74",
+    "topic": "financial protection",
+    "title": "Building Financial Safety Nets",
+    "content": "A financial safety net includes savings, insurance, and emergency funds. It protects against unexpected events. Building it takes time. It provides peace of mind. Protection improves resilience."
+  },
+  {
+    "id": "Doc_75",
+    "topic": "financial protection",
+    "title": "Importance of Diversification",
+    "content": "Diversification spreads financial risk across different areas. It reduces impact of losses. Relying on one source is risky. Balance improves stability. Diversification supports long-term security."
+  },
+  {
+    "id": "Doc_76",
+    "topic": "budgeting",
+    "title": "Zero-Based Budgeting",
+    "content": "Zero-based budgeting assigns every dollar a purpose. Income minus expenses should equal zero. This ensures all money is accounted for. It improves control over spending. It encourages intentional financial decisions."
+  },
+  {
+    "id": "Doc_77",
+    "topic": "budgeting",
+    "title": "Budgeting with Irregular Expenses",
+    "content": "Some expenses do not occur monthly, such as insurance or annual fees. Planning ahead for these costs is important. Setting aside small amounts regularly helps. This prevents financial stress. Preparation improves stability."
+  },
+  {
+    "id": "Doc_78",
+    "topic": "saving",
+    "title": "Saving Windfall Income",
+    "content": "Extra income such as bonuses should be used wisely. Saving a portion can strengthen financial security. Avoid spending it entirely. Planning ahead maximizes benefits. Discipline improves outcomes."
+  },
+  {
+    "id": "Doc_79",
+    "topic": "saving",
+    "title": "Emergency vs Goal Savings",
+    "content": "Emergency savings and goal-based savings serve different purposes. Emergency funds provide protection, while goal savings support plans. Keeping them separate is important. This ensures clarity. It prevents misuse of funds."
+  },
+  {
+    "id": "Doc_80",
+    "topic": "saving",
+    "title": "Consistency Over Amount",
+    "content": "Saving regularly is more important than saving large amounts occasionally. Small, consistent contributions build habits. Over time, they accumulate significantly. Discipline is key. Consistency ensures progress."
+  },
+  {
+    "id": "Doc_81",
+    "topic": "emergency fund",
+    "title": "Rebuilding After Use",
+    "content": "After using an emergency fund, it should be rebuilt as soon as possible. This restores financial protection. Delays increase risk. Regular contributions help recovery. Maintaining the fund is important."
+  },
+  {
+    "id": "Doc_82",
+    "topic": "emergency fund",
+    "title": "Avoiding Misuse of Emergency Funds",
+    "content": "Emergency funds should not be used for non-essential expenses. Misuse reduces protection. It is important to define what qualifies as an emergency. Clear rules prevent misuse. Discipline maintains effectiveness."
+  },
+  {
+    "id": "Doc_83",
+    "topic": "needs vs wants",
+    "title": "Evaluating Purchase Decisions",
+    "content": "Before making a purchase, consider whether it is a need or a want. This simple check improves decisions. It reduces unnecessary spending. Awareness is key. Better evaluation supports financial goals."
+  },
+  {
+    "id": "Doc_84",
+    "topic": "debt basics",
+    "title": "Minimum Payment Trap",
+    "content": "Paying only the minimum on debt increases total repayment. Interest continues to accumulate. This prolongs debt. Paying more reduces interest costs. Faster repayment improves financial health."
+  },
+  {
+    "id": "Doc_85",
+    "topic": "debt basics",
+    "title": "Debt-to-Income Awareness",
+    "content": "Your debt level should be manageable relative to your income. High debt reduces financial flexibility. Monitoring this balance is important. It helps avoid overcommitment. Awareness supports stability."
+  },
+  {
+    "id": "Doc_86",
+    "topic": "financial planning",
+    "title": "Short-Term Financial Planning",
+    "content": "Short-term planning focuses on immediate needs and goals. It includes budgeting and saving. Clear planning reduces uncertainty. It supports daily financial decisions. Structure improves outcomes."
+  },
+  {
+    "id": "Doc_87",
+    "topic": "financial planning",
+    "title": "Long-Term Financial Planning",
+    "content": "Long-term planning focuses on future financial security. It includes retirement and major life goals. Starting early is beneficial. Time helps growth. Consistency is essential."
+  },
+  {
+    "id": "Doc_88",
+    "topic": "spending habits",
+    "title": "Tracking Small Expenses",
+    "content": "Small daily expenses can add up over time. Tracking them reveals hidden spending. Awareness helps reduce waste. Minor changes can have a big impact. Monitoring improves control."
+  },
+  {
+    "id": "Doc_89",
+    "topic": "spending habits",
+    "title": "Avoiding Impulse Purchases",
+    "content": "Impulse purchases are often unnecessary. Taking time before buying helps reduce them. Planning purchases improves decisions. Awareness is key. Control supports savings."
+  },
+  {
+    "id": "Doc_90",
+    "topic": "subscription management",
+    "title": "Subscription Overload",
+    "content": "Having too many subscriptions increases expenses. Many may go unused. Reviewing them regularly is important. Cancel unnecessary ones. Simplification improves efficiency."
+  },
+  {
+    "id": "Doc_91",
+    "topic": "subscription management",
+    "title": "Bundled Services Awareness",
+    "content": "Some services are bundled together. While they may seem cost-effective, they are not always necessary. Evaluate usage carefully. Avoid paying for unused features. Awareness prevents waste."
+  },
+  {
+    "id": "Doc_92",
+    "topic": "financial goals",
+    "title": "Aligning Spending with Goals",
+    "content": "Spending should support financial goals. Unnecessary expenses may delay progress. Aligning decisions improves efficiency. Clear priorities help. Consistency leads to success."
+  },
+  {
+    "id": "Doc_93",
+    "topic": "financial goals",
+    "title": "Measuring Financial Progress",
+    "content": "Tracking progress helps maintain motivation. It shows how close you are to goals. Regular updates are important. Adjustments may be needed. Measurement improves success."
+  },
+  {
+    "id": "Doc_94",
+    "topic": "risk awareness",
+    "title": "Understanding Financial Uncertainty",
+    "content": "Financial situations can change unexpectedly. Preparing for uncertainty is important. Savings and planning reduce impact. Flexibility improves resilience. Awareness is key."
+  },
+  {
+    "id": "Doc_95",
+    "topic": "risk awareness",
+    "title": "Avoiding High-Risk Decisions",
+    "content": "High-risk financial decisions can lead to losses. Careful evaluation is important. Avoid decisions based on pressure. Seek reliable information. Thoughtful choices reduce risk."
+  },
+  {
+    "id": "Doc_96",
+    "topic": "insurance basics",
+    "title": "Matching Insurance to Needs",
+    "content": "Insurance should match individual needs. Not all policies are necessary. Choosing appropriate coverage is important. Over-insurance increases cost. Balance is key."
+  },
+  {
+    "id": "Doc_97",
+    "topic": "insurance basics",
+    "title": "Reviewing Insurance Policies",
+    "content": "Insurance needs may change over time. Reviewing policies regularly ensures relevance. Adjust coverage when needed. Keeping policies updated improves protection. Regular checks are useful."
+  },
+  {
+    "id": "Doc_98",
+    "topic": "income management",
+    "title": "Budgeting Based on Net Income",
+    "content": "Budgets should be based on net income after deductions. This provides a realistic view. Planning based on gross income may lead to overspending. Accuracy improves outcomes. Clarity is important."
+  },
+  {
+    "id": "Doc_99",
+    "topic": "financial discipline",
+    "title": "Consistency in Financial Habits",
+    "content": "Consistent habits are more effective than occasional effort. Regular saving and controlled spending matter. Discipline builds over time. Small actions lead to big results. Stability depends on consistency."
+  },
+  {
+    "id": "Doc_100",
+    "topic": "financial awareness",
+    "title": "Understanding Your Financial Position",
+    "content": "Knowing your income, expenses, assets, and liabilities is important. It provides a clear financial picture. Awareness supports better decisions. It helps identify risks. Clarity improves control."
   }
 ]
