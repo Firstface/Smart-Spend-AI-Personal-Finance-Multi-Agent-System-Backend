@@ -7,7 +7,7 @@ Flow:
   3. No  → if intent looks like personal-finance education → Education RAG agent; else general reply
 
 Response format:
-  { "reply": "...", "type": "quick_entry" | "education" | "general" | "error", "transaction": {...} }
+  { "reply": "...", "type": "quick_entry" | "education" | "insights" | "general" | "error", "transaction": {...}, "insights": {...} }
 """
 import logging
 from fastapi import APIRouter, Depends
@@ -16,7 +16,8 @@ from pydantic import BaseModel
 
 from database import get_db
 from agents.categorization.quick_entry import parse_quick_entry
-from agents.chat_routing import should_route_to_education
+from agents.chat_routing import should_route_to_education, should_route_to_insights, should_route_to_planning
+from agents.planning.agent import PlanningAgent
 from api.deps import get_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -53,6 +54,34 @@ CATEGORY_DISPLAY = {
 
 class ChatRequest(BaseModel):
     message: str
+
+
+def _build_insights_reply(insights: dict, original_message: str) -> str:
+    summary = insights.get("monthly_summary") or {}
+    total_expense = float(summary.get("total_expense") or 0.0)
+    top_categories = summary.get("top_categories") or []
+    unusual = insights.get("unusual_spending") or []
+    subscriptions = (insights.get("subscriptions") or {}).get("subscriptions") or []
+    recommendations = insights.get("recommendations") or []
+
+    if total_expense <= 0 and not top_categories and not unusual and not subscriptions:
+        return (
+            f"I checked your recent spending for \"{original_message}\", but there isn't enough confirmed expense "
+            "data yet. Add a few categorized transactions first, then ask again."
+        )
+
+    top_label = ""
+    if isinstance(top_categories, list) and top_categories:
+        top = top_categories[0] or {}
+        category = str(top.get("category") or "Unknown")
+        percentage = float(top.get("percentage") or 0.0)
+        top_label = f"Top category: {category} ({percentage:.1f}%)."
+
+    return (
+        f"I reviewed your recent spending. Total expense is ¥{total_expense:.2f}. "
+        f"{top_label} Detected {len(unusual)} unusual transaction(s), "
+        f"{len(subscriptions)} subscription item(s), and {len(recommendations)} suggestion(s)."
+    ).strip()
 
 
 @router.post("/chat")
@@ -114,8 +143,40 @@ async def chat(
             "transaction": cat_txn.model_dump(mode="json"),
         }
 
-    # ── Step 4: Intent routing → Education agent or general reply ───────────────
+    # ── Step 4: Intent routing → Insights / Education agent or general reply ───
+    if should_route_to_insights(message):
+        try:
+            from agents.insights.agent import generate_insights
+
+            insights = await generate_insights(user_id=user_id, db=db, use_llm=False)
+            insights_payload = insights.model_dump(mode="json")
+            return {
+                "reply": _build_insights_reply(insights_payload, message),
+                "type": "insights",
+                "insights": insights_payload,
+            }
+        except Exception as e:
+            logger.warning("insights agent from chat failed: %s", e)
+
+    if should_route_to_planning(message):
+        logger.info(f"Routing to PlanningAgent based on message: '{message}'")
+        try:
+            # 直接调用你的 Agent 处理函数
+            # 它会返回解析并处理后的 Markdown 字符串
+            planning_agent = PlanningAgent()
+            reply_text = await planning_agent.handle(message, user_id, db)
+            
+            return {
+                "reply": reply_text,
+                "type": "planning",  # 给前端一个明确的类型，方便做样式区分
+            }
+        except Exception as e:
+            logger.error(f"planning agent from chat failed: {e}")
+            return {"reply": f"Sorry, I had trouble processing your planning request: {str(e)[:80]}", "type": "error"}
+            # 如果失败了，可以选择报错或者继续往下走让 general 兜底
+
     if should_route_to_education(message):
+        logger.info(f"Routing to Education agent based on message: '{message}'")
         try:
             from agents.education.service import answer_question
 
@@ -141,6 +202,8 @@ async def chat(
             }
         except Exception as e:
             logger.warning("education agent from chat failed: %s", e)
+
+    
 
     general_reply = (
         f"Got your message: \"{message}\"\n\n"

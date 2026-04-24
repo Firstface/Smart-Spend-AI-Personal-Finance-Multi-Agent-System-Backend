@@ -1,8 +1,6 @@
-import os
-
 import pytest
 
-from agents.chat_routing.intent import should_route_to_education
+from agents.chat_routing.intent import should_route_to_education, should_route_to_insights
 
 
 @pytest.fixture(autouse=True)
@@ -36,3 +34,17 @@ def test_llm_router_respects_env_zero(monkeypatch):
     monkeypatch.setenv("CHAT_EDUCATION_LLM_ROUTER", "0")
     # No keyword, question-shaped — without LLM should stay False
     assert should_route_to_education("What is the capital of France?") is False
+
+
+def test_insights_keyword_chinese():
+    assert should_route_to_insights("帮我分析最近支出") is True
+    assert should_route_to_insights("看看我这个月花了多少") is True
+
+
+def test_insights_keyword_english():
+    assert should_route_to_insights("Can you summarize my spending this month?") is True
+
+
+def test_insights_not_smalltalk_or_general():
+    assert should_route_to_insights("thanks") is False
+    assert should_route_to_insights("What is compound interest?") is False
