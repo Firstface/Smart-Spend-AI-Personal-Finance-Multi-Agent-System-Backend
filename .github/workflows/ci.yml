@@ -38,7 +38,7 @@ jobs:
       - run: pip install -r requirements.txt pytest pytest-asyncio
       - run: |
           pytest tests/test_quick_entry.py \
-                 tests/test_refusal.py \
+             tests/test_education_refusal.py \
                  tests/test_chat_intent.py \
                  tests/test_insights.py \
                  -v --tb=short
