@@ -9,14 +9,20 @@ Priority chain (core course principle: deterministic rules before LLM):
   Layer 5: LLM fallback      conf varies  has cost, last resort
   Layer 6: Self-reflection   triggers on low confidence  extra LLM cost, improves quality
 
+Improvements over previous version:
+- Per-step structured trace: each layer appends to a `trace` list
+- End-of-classification JSON log: full decision path, elapsed_ms, llm_invoked flag
+- Latency monitoring: elapsed_ms recorded for every transaction
+
 Course reference:
 - Single-path Plan Generator (Day2) — fixed priority chain, no branching
-- Guardrail (Day2/Day3)             — each layer has a confidence ceiling;
-                                      LLM cannot masquerade as a high-certainty rule
-- Explainability (XRAI)             — evidence field records decision source
+- Guardrail (Day2/Day3)             — each layer has a confidence ceiling
+- Explainability (XRAI)             — evidence field + trace for decision audit
 """
+import json
 import logging
 import re
+import time
 from typing import List, Optional
 
 from schemas.transaction import (
@@ -49,7 +55,15 @@ async def classify_single(
     """
     Run the full six-layer pipeline on a single transaction.
     Neutral transactions (refunds/top-ups) return OTHER immediately without entering the pipeline.
+
+    Emits a structured JSON log entry at completion with:
+      - decision_layer, final_category, final_confidence
+      - layers_traversed, llm_invoked, elapsed_ms
+      - trace: per-layer hit/miss record
     """
+    start_time = time.monotonic()
+    trace: list = []          # per-layer decision record for observability
+
     # Neutral transactions are not classified
     if txn.direction == DirectionEnum.NEUTRAL:
         return _build_result(
@@ -65,41 +79,55 @@ async def classify_single(
 
     # ── Layer 1: Merchant map ──────────────────────────────────────────────────
     result = match_merchant(counterparty)
+    trace.append({"layer": "merchant_map", "hit": result is not None,
+                  "confidence": result[1] if result else None})
     if result:
         cat, conf, evidence = result
-        logger.info(f"[L1 merchant_map] '{counterparty}' → {cat.value}")
+        logger.info("[L1 merchant_map] '%s' → %s", counterparty, cat.value)
+        _log_complete(counterparty, cat.value, conf, "merchant_map", trace, start_time, llm_invoked=False)
         return _build_result(txn, cat, conf, evidence, DecisionSourceEnum.MERCHANT_MAP)
 
     # ── Layer 2: Keyword rules ─────────────────────────────────────────────────
     result = match_keywords(counterparty, description)
+    trace.append({"layer": "keyword_rules", "hit": result is not None,
+                  "confidence": result[1] if result else None})
     if result:
         cat, conf, evidence = result
-        logger.info(f"[L2 keyword_rule] '{counterparty}' → {cat.value}")
+        logger.info("[L2 keyword_rule] '%s' → %s", counterparty, cat.value)
+        _log_complete(counterparty, cat.value, conf, "keyword_rule", trace, start_time, llm_invoked=False)
         return _build_result(txn, cat, conf, evidence, DecisionSourceEnum.KEYWORD_RULE)
 
     # ── Layer 3: Subscription detection ───────────────────────────────────────
     result = detect_subscription(counterparty, txn.amount, history)
+    trace.append({"layer": "subscription", "hit": result is not None,
+                  "confidence": result[1] if result else None})
     if result:
         cat, conf, evidence = result
-        logger.info(f"[L3 subscription] '{counterparty}' → {cat.value}")
+        logger.info("[L3 subscription] '%s' → %s", counterparty, cat.value)
+        _log_complete(counterparty, cat.value, conf, "subscription", trace, start_time, llm_invoked=False)
         return _build_result(txn, cat, conf, evidence, DecisionSourceEnum.SUBSCRIPTION)
 
     # ── Layer 4: Similarity matching ───────────────────────────────────────────
     result = similarity_matcher.match(counterparty, description)
+    trace.append({"layer": "similarity", "hit": result is not None,
+                  "confidence": result[1] if result else None})
     if result:
         cat, conf, evidence = result
-        logger.info(f"[L4 similarity] '{counterparty}' → {cat.value} conf={conf:.2f}")
+        logger.info("[L4 similarity] '%s' → %s conf=%.2f", counterparty, cat.value, conf)
+        _log_complete(counterparty, cat.value, conf, "similarity", trace, start_time, llm_invoked=False)
         return _build_result(txn, cat, conf, evidence, DecisionSourceEnum.SIMILARITY)
 
     # ── Layer 5: LLM fallback ──────────────────────────────────────────────────
     cat, rationale, conf = await llm_classify(counterparty, description)
     source = DecisionSourceEnum.LLM
-    logger.info(f"[L5 llm] '{counterparty}' → {cat.value} conf={conf:.2f}")
+    trace.append({"layer": "llm", "hit": True, "confidence": conf})
+    logger.info("[L5 llm] '%s' → %s conf=%.2f", counterparty, cat.value, conf)
 
     # ── Layer 6: Self-reflection (triggered only on low confidence) ────────────
     if conf < CONFIDENCE_THRESHOLD and not _is_low_information_input(counterparty, description):
         logger.info(
-            f"[L6 reflection] Triggering self-reflection: '{counterparty}' conf={conf:.2f} < {CONFIDENCE_THRESHOLD}"
+            "[L6 reflection] Triggering self-reflection: '%s' conf=%.2f < %.2f",
+            counterparty, conf, CONFIDENCE_THRESHOLD,
         )
         ref_cat, ref_conf, ref_rationale, rounds = await reflect_on_classification(
             counterparty=counterparty,
@@ -108,15 +136,44 @@ async def classify_single(
             previous_confidence=conf,
             previous_rationale=rationale,
         )
+        trace.append({"layer": "reflection", "hit": ref_conf > conf,
+                      "rounds": rounds, "confidence_before": conf, "confidence_after": ref_conf})
         if ref_conf > conf:
             cat, conf, rationale = ref_cat, ref_conf, ref_rationale
             source = DecisionSourceEnum.LLM_REFLECTED
             logger.info(
-                f"[L6 reflection] Improved: '{counterparty}' "
-                f"conf={conf:.2f} ({rounds} rounds)"
+                "[L6 reflection] Improved: '%s' conf=%.2f (%d rounds)",
+                counterparty, conf, rounds,
             )
 
+    _log_complete(counterparty, cat.value, conf, source.value, trace, start_time, llm_invoked=True)
     return _build_result(txn, cat, conf, rationale, source)
+
+
+# ── Helper: structured completion log ───────────────────────────────────────────
+def _log_complete(
+    counterparty: str,
+    category: str,
+    confidence: float,
+    decision_layer: str,
+    trace: list,
+    start_time: float,
+    llm_invoked: bool,
+) -> None:
+    elapsed_ms = round((time.monotonic() - start_time) * 1000, 1)
+    logger.info(
+        json.dumps({
+            "event": "classification_complete",
+            "counterparty": counterparty,
+            "final_category": category,
+            "final_confidence": round(confidence, 4),
+            "decision_layer": decision_layer,
+            "layers_traversed": len(trace),
+            "llm_invoked": llm_invoked,
+            "elapsed_ms": elapsed_ms,
+            "trace": trace,
+        }, ensure_ascii=False)
+    )
 
 
 # ── Helper: build output object ─────────────────────────────────────────────────
