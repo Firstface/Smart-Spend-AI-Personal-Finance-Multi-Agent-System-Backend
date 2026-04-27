@@ -1,0 +1,26 @@
+[flake8]
+max-line-length = 120
+exclude =
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    node_modules,
+    .pytest_cache
+
+# Ignore style/whitespace issues — only catch syntax errors (E9xx)
+extend-ignore =
+    # Whitespace
+    W191, W291, W292, W293, W391,
+    # Blank lines
+    E301, E302, E303, E304, E305, E306,
+    # Imports
+    E401, E402,
+    # Line length (max-line-length handles this)
+    E501,
+    # Whitespace in expressions
+    E128, E202, E203, E211, E225, E231, E251, E261, E262, E265, E266,
+    # Statements
+    E701, E711, E712, E714, E722,
+    # Pyflakes: unused imports, variables, f-strings
+    F401, F811, F841, F541,
