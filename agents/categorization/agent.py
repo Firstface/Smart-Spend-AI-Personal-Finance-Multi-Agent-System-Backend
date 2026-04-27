@@ -11,7 +11,13 @@ Full Agent loop as per course (Day2 PPT Slide 17):
   3. Execute
   4. Evaluate (self-reflection)
   5. Output + write to database
+
+Production improvements:
+  - Batch concurrency control: asyncio.Semaphore limits simultaneous LLM calls
+  - graceful degradation: asyncio.gather(return_exceptions=True) so one failure
+    does not abort the entire batch
 """
+import asyncio
 import uuid
 import logging
 from typing import List
@@ -26,6 +32,7 @@ from schemas.transaction import (
 )
 from agents.categorization.pipeline import classify_single
 from agents.categorization.similarity.matcher import SimilarityMatcher
+from agents.categorization.config import BATCH_CONCURRENCY
 from models.transaction import Transaction
 from models.review_queue import ReviewItem
 
@@ -54,15 +61,38 @@ async def run_batch(
     matcher = SimilarityMatcher()
     matcher.fit(history)
 
-    # ── Step 3: Classify each transaction ──────────────────────────────────────
+    # ── Step 3: Classify transactions concurrently (bounded by semaphore) ─────
+    # Semaphore limits simultaneous LLM calls to avoid overwhelming providers.
+    # return_exceptions=True prevents one failed transaction from aborting the batch.
+    semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
+
+    async def _classify_bounded(txn):
+        async with semaphore:
+            return await classify_single(txn, history, matcher)
+
+    raw_results = await asyncio.gather(
+        *[_classify_bounded(txn) for txn in transactions],
+        return_exceptions=True,
+    )
+
     results: List[CategorizedTransaction] = []
     stats_by_source: dict = {}
+    failed_count = 0
 
-    for txn in transactions:
-        cat_txn = await classify_single(txn, history, matcher)
-        results.append(cat_txn)
-        src = cat_txn.decision_source.value if hasattr(cat_txn.decision_source, "value") else cat_txn.decision_source
+    for i, outcome in enumerate(raw_results):
+        if isinstance(outcome, Exception):
+            failed_count += 1
+            logger.error(
+                "Transaction %d/%d classification failed: %s",
+                i + 1, len(transactions), outcome,
+            )
+            continue
+        results.append(outcome)
+        src = outcome.decision_source.value if hasattr(outcome.decision_source, "value") else outcome.decision_source
         stats_by_source[src] = stats_by_source.get(src, 0) + 1
+
+    if failed_count:
+        logger.warning("Batch: %d/%d transactions failed classification", failed_count, len(transactions))
 
     # ── Step 4: Write to database ──────────────────────────────────────────────
     review_queue = _save_batch(db, user_id, results)

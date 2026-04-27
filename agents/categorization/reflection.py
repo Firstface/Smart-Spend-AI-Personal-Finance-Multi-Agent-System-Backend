@@ -110,6 +110,9 @@ async def reflect_on_classification(
             break
 
         # ── Output parsing and validation ──────────────────────────────────────
+        if not isinstance(result, dict):
+            logger.warning(f"Reflection round {i+1} returned non-dict: {type(result)}, skipping")
+            break
         new_cat_str = result.get("category", current_cat)
         if new_cat_str not in valid_cats:
             logger.warning(f"Reflection returned invalid category '{new_cat_str}', keeping original")
