@@ -11,15 +11,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY", "") or "").strip() or "ollama"
+OPENAI_API_BASE = (os.getenv("OPENAI_API_BASE", "") or "").strip() or None
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set in .env")
 
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in .env")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_API_BASE)
 
 engine = create_engine(
     DATABASE_URL,
@@ -28,7 +26,7 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(bind=engine)
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small").strip()
 
 # Smaller distance means higher relevance.
 DEFAULT_RETRIEVAL_DISTANCE_THRESHOLD = float(
@@ -45,6 +43,10 @@ DEFAULT_RETRIEVAL_MAX_K = int(
 
 
 def get_query_embedding(question: str) -> list[float]:
+    if not EMBEDDING_MODEL:
+        raise RuntimeError(
+            "OPENAI_EMBEDDING_MODEL is not configured; education retrieval is disabled."
+        )
     response = client.embeddings.create(
         model=EMBEDDING_MODEL,
         input=question

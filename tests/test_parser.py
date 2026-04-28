@@ -56,5 +56,5 @@ def test_parse_alipay_real_file():
 # ── 不支持的格式 ───────────────────────────────────────────────────────────────
 def test_unsupported_format():
     from agents.categorization.parser import parse_file
-    with pytest.raises(ValueError, match="不支持的文件格式"):
+    with pytest.raises(ValueError, match="Unsupported file format"):
         parse_file("bill.pdf", b"dummy content")

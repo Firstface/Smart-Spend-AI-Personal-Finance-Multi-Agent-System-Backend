@@ -36,13 +36,17 @@ def test_llm_router_respects_env_zero(monkeypatch):
     assert should_route_to_education("What is the capital of France?") is False
 
 
-def test_insights_keyword_chinese():
-    assert should_route_to_insights("帮我分析最近支出") is True
-    assert should_route_to_insights("看看我这个月花了多少") is True
-
-
 def test_insights_keyword_english():
+    assert should_route_to_insights("Analyze my recent spending") is True
+    assert should_route_to_insights("Show my monthly spending") is True
+
+
+def test_insights_summary_question_english():
     assert should_route_to_insights("Can you summarize my spending this month?") is True
+
+
+def test_insights_chinese_no_longer_routes():
+    assert should_route_to_insights("帮我分析最近支出") is False
 
 
 def test_insights_not_smalltalk_or_general():

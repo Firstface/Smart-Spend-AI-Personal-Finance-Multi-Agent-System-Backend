@@ -23,17 +23,20 @@ logger = logging.getLogger("insights.llm")
 
 # ── 提示词模板（版本化管理）─────────────────────────────────────────────────────
 RECOMMENDATION_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", f"""你是一位专业的财务顾问（提示词版本 {PROMPT_VERSION}）。
-基于用户的财务数据，生成个性化的财务建议。
+    ("system", f"""You are a professional financial advisor (prompt version {PROMPT_VERSION}).
+Generate personalized financial recommendations based on the user's spending data.
 
-严格要求：
-1. 只输出 JSON，不输出任何其他文字
-2. 建议应基于用户的实际支出模式，具有针对性和可操作性
-3. 每个建议应包含：type（建议类型）、title（标题）、description（详细描述）、priority（优先级：high/medium/low）
-4. 生成 3-5 条建议
-5. 建议应多样化，覆盖不同的财务方面
+Strict requirements:
+1. Output JSON only. Do not output any extra text.
+2. Every recommendation must be grounded in the user's actual spending patterns.
+3. Each recommendation must contain: type, title, description, and priority (high/medium/low).
+4. Generate 3 to 5 recommendations.
+5. Recommendations should be diverse and cover different financial angles.
+6. All fields must be written in English.
+7. Keep titles concise and action-oriented.
+8. Keep descriptions practical, specific, and user-friendly.
 
-输出格式（严格 JSON）：
+Output format (strict JSON):
 {{{{
   "recommendations": [
     {{{{
@@ -44,16 +47,16 @@ RECOMMENDATION_PROMPT = ChatPromptTemplate.from_messages([
     }}}}
   ]
 }}}}"""),
-    ("human", """月度财务摘要：
-- 总支出：{total_expense:.2f}元
-- 月均支出：{average_monthly_spending:.2f}元
-- 前5大支出类别：
+    ("human", """Monthly financial summary:
+- Total expense: {total_expense:.2f} CNY
+- Average monthly spending: {average_monthly_spending:.2f} CNY
+- Top 5 spending categories:
 {top_categories}
 
-最近的交易：
+Recent transactions:
 {recent_transactions}
 
-请生成个性化的财务建议。"""),
+Please generate personalized financial recommendations in English."""),
 ])
 
 
@@ -171,8 +174,8 @@ async def generate_ai_recommendations(
         for rec in result.get("recommendations", []):
             try:
                 recommendation = SpendingRecommendation(
-                    type=rec.get("type", "财务建议"),
-                    title=rec.get("title", "未命名建议"),
+                    type=rec.get("type", "Financial guidance"),
+                    title=rec.get("title", "Untitled recommendation"),
                     description=rec.get("description", ""),
                     priority=rec.get("priority", "medium")
                 )

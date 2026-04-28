@@ -18,11 +18,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set in .env")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in .env")
-
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY", "") or "").strip() or "ollama"
+OPENAI_API_BASE = (os.getenv("OPENAI_API_BASE", "") or "").strip() or None
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 
 engine = create_engine(
     DATABASE_URL,
@@ -31,7 +29,7 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(bind=engine)
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_API_BASE)
 
 RETRIEVAL_INITIAL_K = int(os.getenv("RETRIEVAL_INITIAL_K", "8"))
 RETRIEVAL_MAX_K = int(os.getenv("RETRIEVAL_MAX_K", "3"))

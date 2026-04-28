@@ -11,15 +11,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY", "") or "").strip() or "ollama"
+OPENAI_API_BASE = (os.getenv("OPENAI_API_BASE", "") or "").strip() or None
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set in .env")
 
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in .env")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_API_BASE)
 
 engine = create_engine(
     DATABASE_URL,
@@ -29,7 +27,7 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine)
 
 # 可改：embedding 模型
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small").strip()
 
 
 def fetch_rows_without_embedding(db) -> list[dict[str, Any]]:
@@ -44,6 +42,10 @@ def fetch_rows_without_embedding(db) -> list[dict[str, Any]]:
 
 
 def get_embedding(text_value: str) -> list[float]:
+    if not EMBEDDING_MODEL:
+        raise RuntimeError(
+            "OPENAI_EMBEDDING_MODEL is not configured; embedding generation is disabled."
+        )
     response = client.embeddings.create(
         model=EMBEDDING_MODEL,
         input=text_value

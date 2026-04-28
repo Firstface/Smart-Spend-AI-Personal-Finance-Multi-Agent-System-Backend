@@ -117,21 +117,29 @@ def _get_llm_from_keys(openai_key: str, groq_key: str):
     Returns an available LLM instance.
     Prefers gpt-4o-mini (OpenAI); falls back to llama-3.1-8b-instant (Groq) if no key.
     """
-    def _build_openai(api_key: Optional[str] = None):
+    def _build_openai(
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
         from langchain_openai import ChatOpenAI
         http_client, http_async_client = _build_http_clients()
         return ChatOpenAI(
-            model=LLM_MODEL,
+            model=model_name or LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             api_key=api_key,
+            base_url=base_url,
             http_client=http_client,
             http_async_client=http_async_client,
         )
 
+    openai_model = _sanitize_key(os.getenv("OPENAI_MODEL", "")) or LLM_MODEL
+    openai_base = _sanitize_key(os.getenv("OPENAI_API_BASE", "")) or None
+
     if openai_key and openai_key != "sk-xxx":
-        logger.debug("LLM path: OpenAI gpt-4o-mini")
-        return _build_openai(openai_key)
+        logger.debug("LLM path: OpenAI-compatible %s", openai_model)
+        return _build_openai(openai_key, openai_model, openai_base)
     elif groq_key:
         try:
             from langchain_groq import ChatGroq
@@ -145,7 +153,7 @@ def _get_llm_from_keys(openai_key: str, groq_key: str):
         except ImportError:
             logger.warning("langchain_groq not installed; trying OpenAI fallback")
             if openai_key and openai_key != "sk-xxx":
-                return _build_openai(openai_key)
+                return _build_openai(openai_key, openai_model, openai_base)
             logger.warning("No valid OpenAI key available; LLM fallback disabled")
             return None
     else:

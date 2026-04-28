@@ -212,6 +212,11 @@ async def chat(
         "• `Grab $12.80`\n"
         "• `Netflix $15.99`\n"
         "• `Lunch Meituan $10`\n\n"
+        "It also supports **spending follow-up** requests, for example:\n"
+        "• `Analyze my recent spending`\n"
+        "• `Summarize my spending this month`\n"
+        "• `Show my spending trend`\n"
+        "• `Check unusual spending`\n\n"
         "Ask a **personal finance learning** question (e.g. budgeting, saving, credit) "
         "to use the education assistant, or try quick entry above."
     )

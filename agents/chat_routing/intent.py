@@ -115,26 +115,7 @@ INSIGHTS_PHRASES_EN: tuple[str, ...] = (
     "my expenses this month",
 )
 
-INSIGHTS_PHRASES_ZH: tuple[str, ...] = (
-    "分析最近支出",
-    "分析我的支出",
-    "总结最近支出",
-    "总结我的支出",
-    "最近花了多少",
-    "这个月花了多少",
-    "本月支出",
-    "本月消费",
-    "消费趋势",
-    "支出趋势",
-    "异常支出",
-    "异常消费",
-    "订阅汇总",
-    "自动扣费",
-    "消费分析",
-    "开销分析",
-    "财务总结",
-    "支出总结",
-)
+INSIGHTS_PHRASES_ZH: tuple[str, ...] = ()
 
 # 查看逻辑 (View)
 PLAN_VIEW_KEYWORDS = (
@@ -207,19 +188,16 @@ def should_route_to_insights(message: str) -> bool:
     low = _normalize_en(raw)
     if any(p in low for p in INSIGHTS_PHRASES_EN):
         return True
-    if any(p in raw for p in INSIGHTS_PHRASES_ZH):
-        return True
 
-    # A light heuristic for "my spending / expenses" questions that ask for
-    # summary, trends, anomalies, or subscription review.
+    # English-first heuristic for "my spending / expenses" analysis requests.
     has_personal_scope = any(
         phrase in low
         for phrase in ("my spending", "my expense", "my expenses", "this month", "recent spending")
-    ) or any(phrase in raw for phrase in ("我的支出", "我的消费", "最近支出", "最近消费", "这个月"))
+    )
     has_analysis_intent = any(
         phrase in low
         for phrase in ("summary", "summarize", "summarise", "analyze", "analyse", "trend", "unusual", "subscription")
-    ) or any(phrase in raw for phrase in ("总结", "分析", "趋势", "异常", "订阅", "汇总"))
+    )
 
     return has_personal_scope and has_analysis_intent
 
@@ -230,7 +208,8 @@ def _llm_education_intent(message: str) -> bool | None:
     """
     if os.getenv("CHAT_EDUCATION_LLM_ROUTER", "1").strip().lower() in ("0", "false", "no"):
         return None
-    key = os.getenv("OPENAI_API_KEY", "").strip()
+    base_url = os.getenv("OPENAI_API_BASE", "").strip()
+    key = os.getenv("OPENAI_API_KEY", "").strip() or ("ollama" if base_url else "")
     if not key or key == "sk-xxx":
         return None
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -239,7 +218,7 @@ def _llm_education_intent(message: str) -> bool | None:
     except ImportError:
         return None
 
-    client = OpenAI(api_key=key)
+    client = OpenAI(api_key=key, base_url=base_url or None)
     system = (
         "You route messages for a personal finance assistant app.\n"
         'Reply with a single JSON object: {"intent":"education"} or {"intent":"other"}.\n'
@@ -253,7 +232,6 @@ def _llm_education_intent(message: str) -> bool | None:
             model=model,
             temperature=0,
             max_tokens=32,
-            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": message.strip()[:2000]},
@@ -386,4 +364,3 @@ def _llm_planning_intent(message: str) -> bool | None:
     except Exception as e:
         logger.warning("planning intent LLM router failed: %s", e)
     return None
-
